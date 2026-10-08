@@ -330,33 +330,33 @@ export async function fetchFathers(
  */
 function sliceFromExcerpt(text: string, excerpt?: string): string {
   if (!excerpt) return text;
-  // Catena's excerpt and its page body differ in quote style and spacing, so
-  // every apostrophe and quote is folded to one form before matching.
-  const norm = (t: string) =>
-    t
-      .replace(/[\u2018\u2019\u02bc\u00b4`']/g, "'")
-      .replace(/[\u201c\u201d"]/g, '"')
-      .replace(/[\u2013\u2014]/g, "-")
-      .replace(/[\s\u00a0]+/g, " ")
-      .trim();
-  const needle = norm(excerpt).replace(/[.…]+$/, "").slice(0, 60);
-  if (needle.length < 25) return text;
-  const hayNorm = norm(text);
-  let at = hayNorm.indexOf(needle);
-  if (at < 0) {
-    // Try a shorter opening, in case the excerpt was trimmed mid-word.
-    const shorter = needle.slice(0, 35);
-    at = shorter.length >= 25 ? hayNorm.indexOf(shorter) : -1;
-  }
-  if (at < 0) return text;
-  // Map the position back to the original string by counting non-space chars.
-  const target = hayNorm.slice(0, at).replace(/\s/g, "").length;
-  let seen = 0;
+
+  // Compare letters and digits only. Catena's excerpt and its page body differ
+  // in spacing, quote style, footnote markers and even word breaks — its text
+  // carries artifacts like "Scrip tures" — and all of that disappears here.
+  const compact: string[] = [];
+  const indexInText: number[] = [];
   for (let i = 0; i < text.length; i++) {
-    if (!/\s/.test(text[i])) {
-      if (seen === target) return text.slice(i);
-      seen++;
+    const c = text[i].toLowerCase();
+    if ((c >= "a" && c <= "z") || (c >= "0" && c <= "9")) {
+      compact.push(c);
+      indexInText.push(i);
     }
+  }
+  const hay = compact.join("");
+
+  const needleFull = excerpt
+    .toLowerCase()
+    .replace(/\[[^\]]*\]/g, " ") // footnote markers and bracketed links
+    .replace(/[^a-z0-9]/g, "");
+  if (needleFull.length < 20) return text;
+
+  // Longest anchor first; a shorter one still finds the place if the excerpt
+  // was trimmed mid-word or carries a stray character.
+  for (const len of [80, 60, 45, 30, 20]) {
+    if (needleFull.length < len) continue;
+    const at = hay.indexOf(needleFull.slice(0, len));
+    if (at >= 0) return text.slice(indexInText[at]);
   }
   return text;
 }
