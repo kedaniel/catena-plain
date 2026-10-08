@@ -44,6 +44,9 @@ export async function POST(req: NextRequest) {
   const pasted = clip(body.text, MAX_INPUT_CHARS + 1);
   const verse = clip(body.verse, 80);
   const father = clip(body.father, 120);
+  // The excerpt Catena showed in the list: it marks where this verse's portion
+  // of a long work begins.
+  const excerpt = clip(body.excerpt, 500);
   // The Arabic version always answers in Arabic, whatever the page sends.
   const lang: Lang =
     auth.session.profile === "arabic" ? "ar" : body.lang === "ar" || body.lang === "both" ? body.lang : "en";
@@ -69,7 +72,9 @@ export async function POST(req: NextRequest) {
 
   // A commentary already turned into plain language is served from the cache,
   // so the group only ever pays for it once.
-  const cacheKey = sha([canonical || `text:${sha(pasted)}`, lang, level, cfg.model, PROMPT_VERSION].join("|"));
+  const cacheKey = sha(
+    [canonical || `text:${sha(pasted)}`, sha(excerpt), lang, level, cfg.model, PROMPT_VERSION].join("|"),
+  );
   const cached = await cacheGet(cacheKey);
   if (cached) {
     return new Response(cached, {
@@ -85,7 +90,7 @@ export async function POST(req: NextRequest) {
   let sourceUrl = "";
   if (!pasted && canonical) {
     try {
-      const page = await fetchCatenaText(canonical);
+      const page = await fetchCatenaText(canonical, excerpt);
       text = page.text.slice(0, MAX_INPUT_CHARS);
       pageTitle = page.title;
       sourceUrl = page.url;
@@ -95,7 +100,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const userPrompt = buildUserPrompt({ text, fromPage: !pasted, pageTitle, verse, father, lang, level });
+  const userPrompt = buildUserPrompt({ text, fromPage: !pasted, pageTitle, verse, father, excerpt, lang, level });
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({

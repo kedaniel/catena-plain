@@ -5,7 +5,7 @@ export type Level = "simple" | "study";
  * Bumped whenever the prompt changes shape, so cached answers in the old shape
  * are never served alongside new ones.
  */
-export const PROMPT_VERSION = "v4-verse-match-check";
+export const PROMPT_VERSION = "v5-excerpt-scoped";
 
 export const SYSTEM = `You help church study groups read Church Fathers' commentaries from the Catena Bible app. Catena uses old 19th-century English translations that are hard for modern readers.
 
@@ -57,6 +57,7 @@ export function buildUserPrompt(opts: {
   pageTitle?: string;
   verse?: string;
   father?: string;
+  excerpt?: string;
   lang: Lang;
   level: Level;
 }): string {
@@ -71,6 +72,9 @@ export function buildUserPrompt(opts: {
     opts.pageTitle ? `Page title: ${opts.pageTitle}` : "",
     opts.fromPage
       ? "The text below was taken from a Catena commentary web page and may also contain menus, the Bible verse, or other page text. Use only the Father's commentary itself. If no commentary is present, reply with one line saying the commentary text could not be found on the page."
+      : "",
+    opts.excerpt
+      ? `Catena listed this commentary under the verse above with this opening, which marks where the relevant part begins:\n"${opts.excerpt.slice(0, 300)}"\nStart from there. The page may continue into other parts of the same work that belong to a different passage; stop when the author clearly moves on to another subject, and do not render those other parts.`
       : "",
     "",
     "<commentary>",

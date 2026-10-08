@@ -115,6 +115,12 @@ npm run dev
 
 Without Upstash, the app falls back to in-memory limits that reset when the server restarts, and the monthly budget isn't tracked. That's fine locally; in production rely on the workspace limit plus Upstash.
 
+## Commentaries listed under a verse they only touch
+
+Catena indexes long works by every passage they mention. Chrysostom's homily on Acts 23 is listed under Genesis 37:18 because it discusses Joseph part-way through, and the linked page holds the **whole homily**. Reading that page naively gives the reader a commentary on Acts when they asked about Genesis.
+
+The verse page's excerpt is the opening of the portion that belongs to the verse, so the app carries it through and uses it to find where that portion starts, dropping everything before it. Quote style, dashes and spacing are normalised first, since Catena's excerpt and its page body differ. If the excerpt cannot be found the full page is kept rather than risking the loss of real content, and the model is told which opening words mark the relevant part and asked to stop when the author moves on. As a last line of defence it must say which passage the text actually discusses, and flag a mismatch.
+
 ## Faithfulness
 
 The prompt tells Claude to keep every point in the Father's order, add no interpretation, flag unclear phrases instead of guessing, and work only from the text provided. Simplifying can still soften precise theological wording, so the page reminds readers to check against the original.

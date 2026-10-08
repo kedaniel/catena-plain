@@ -144,7 +144,7 @@ function harvest($: cheerio.CheerioAPI, url: URL, seen: Set<string>): FatherOpti
     const unique = bits.filter((t, i) => bits.indexOf(t) === i && t !== whole);
     const father = unique.find((t) => t.length <= 46) ?? whole.slice(0, 46);
     const work = unique.find((t) => t !== father && t.length <= 110) ?? "";
-    const preview = (unique[unique.length - 1] ?? whole).slice(0, 220);
+    const preview = (unique[unique.length - 1] ?? whole).slice(0, 400);
 
     found.push({ url: key, father, work, preview: preview === father ? "" : preview });
   });
@@ -321,7 +321,50 @@ export async function fetchFathers(
  * the rest is passed to Claude, which is told to use only the commentary.
  * That is sturdier than depending on class names that may change.
  */
-export async function fetchCatenaText(raw: string): Promise<{ title: string; text: string; url: string }> {
+/**
+ * Catena indexes long works by every passage they touch. A homily on Acts can
+ * be listed under Genesis 37:18 because it discusses Joseph part-way through,
+ * and the linked page holds the WHOLE homily. The verse page's excerpt is the
+ * opening of the portion that belongs to this verse, so it is used to find
+ * where that portion starts.
+ */
+function sliceFromExcerpt(text: string, excerpt?: string): string {
+  if (!excerpt) return text;
+  // Catena's excerpt and its page body differ in quote style and spacing, so
+  // every apostrophe and quote is folded to one form before matching.
+  const norm = (t: string) =>
+    t
+      .replace(/[\u2018\u2019\u02bc\u00b4`']/g, "'")
+      .replace(/[\u201c\u201d"]/g, '"')
+      .replace(/[\u2013\u2014]/g, "-")
+      .replace(/[\s\u00a0]+/g, " ")
+      .trim();
+  const needle = norm(excerpt).replace(/[.…]+$/, "").slice(0, 60);
+  if (needle.length < 25) return text;
+  const hayNorm = norm(text);
+  let at = hayNorm.indexOf(needle);
+  if (at < 0) {
+    // Try a shorter opening, in case the excerpt was trimmed mid-word.
+    const shorter = needle.slice(0, 35);
+    at = shorter.length >= 25 ? hayNorm.indexOf(shorter) : -1;
+  }
+  if (at < 0) return text;
+  // Map the position back to the original string by counting non-space chars.
+  const target = hayNorm.slice(0, at).replace(/\s/g, "").length;
+  let seen = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (!/\s/.test(text[i])) {
+      if (seen === target) return text.slice(i);
+      seen++;
+    }
+  }
+  return text;
+}
+
+export async function fetchCatenaText(
+  raw: string,
+  excerpt?: string,
+): Promise<{ title: string; text: string; url: string; scoped: boolean }> {
   const target = parseCatenaUrl(raw);
   let page: { $: cheerio.CheerioAPI; url: URL };
   try {
@@ -362,5 +405,7 @@ export async function fetchCatenaText(raw: string): Promise<{ title: string; tex
       "I couldn't find commentary text on that page. Open one Father's commentary in Catena, tap Share, and copy that link. Or paste the text instead.",
     );
   }
-  return { title, text, url: url.toString() };
+  const scopedText = sliceFromExcerpt(text, excerpt);
+  const scoped = scopedText.length < text.length;
+  return { title, text: scopedText, url: url.toString(), scoped };
 }

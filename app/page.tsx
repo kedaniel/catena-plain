@@ -158,7 +158,7 @@ export default function Home() {
     }
     const payload =
       mode === "verse"
-        ? { link: target!.url, verse: verseLabel, father: target!.father }
+        ? { link: target!.url, verse: verseLabel, father: target!.father, excerpt: target!.preview }
         : { text: text.trim() };
     if (pick) setChosen(pick);
 
