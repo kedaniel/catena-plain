@@ -7,7 +7,24 @@ A small web app for a church study group. Enter a Bible verse, pick a Church Fat
 - the Bible verses the Father quotes or alludes to
 - the main point in 2–3 sentences
 
-It runs on your own Anthropic API key. Your friends don't need a Claude account; they only need the link and the access code.
+Your friends don't need any AI account; they only need the link and the access code.
+
+## Choosing a model provider
+
+The app talks to Claude **or** to any OpenAI-compatible provider, so it can run on a free tier instead of paid credits. Set `LLM_PROVIDER` and `LLM_API_KEY`:
+
+| `LLM_PROVIDER` | Where the key comes from | Notes |
+|---|---|---|
+| *(unset)* + `ANTHROPIC_API_KEY` | platform.claude.com | Best quality. Needs paid credits. |
+| `gemini` | aistudio.google.com | Google AI Studio has a free tier. Default model `gemini-3.8-flash`. |
+| `deepseek` | platform.deepseek.com | Very cheap, but still needs a top-up. Default model `deepseek-chat`. |
+| `groq` | console.groq.com | Free tier. Set `LLM_MODEL` to a model it currently serves. |
+| `openrouter` | openrouter.ai | Some models are free. Set `LLM_MODEL`. |
+| `custom` | anywhere OpenAI-compatible | Set `LLM_BASE_URL` and `LLM_MODEL` too. |
+
+Model names and free-tier limits change, so check the provider's own console for the current model name. If the name is wrong the app says so plainly rather than failing silently.
+
+Quality differs by provider. The prompt is the same for all of them: keep every point in the Father's order, add no interpretation, flag unclear phrases. A smaller model follows that less exactly, so the "check against the original" note on the page matters more, not less.
 
 ## Two versions
 
@@ -40,7 +57,7 @@ Every finished plain version is stored, keyed by the commentary, language, level
 1. **Create a dedicated API workspace with a spend limit** (this is your hard cap, see below).
 2. **Import this repo on [Vercel](https://vercel.com/new)** (free Hobby plan is fine). Framework: Next.js, no settings to change.
 3. **Add environment variables** in Vercel → Project → Settings → Environment Variables:
-   - `ANTHROPIC_API_KEY` — a key created *inside the dedicated workspace*
+   - a provider: either `ANTHROPIC_API_KEY` (a key created *inside the dedicated workspace*), or `LLM_PROVIDER` plus `LLM_API_KEY` from the table above
    - `ACCESS_CODES` — e.g. `stmark-study-2026` (comma-separate several codes to give each person their own)
    - `ARABIC_ACCESS_CODES` — optional; codes that get the Arabic version, e.g. `theo-26`
 4. **Add Upstash Redis** (Vercel → Storage / Marketplace → Upstash Redis, free plan) and connect it to the project. This turns on the monthly budget, daily cap and per-person limits.
@@ -50,7 +67,9 @@ See `.env.example` for all optional settings.
 
 ## Keeping costs under control
 
-There are two layers.
+If you're on a free tier, skip to the soft caps: there is no bill to cap. Set `INPUT_PRICE_PER_MTOK=0` and `OUTPUT_PRICE_PER_MTOK=0` so the dollar budget doesn't get in the way, and rely on the request limits below.
+
+With Claude there are two layers.
 
 **1. Hard cap: Anthropic Console workspace spend limit.** Anthropic lets you set a custom monthly spend limit per workspace (not on the Default workspace). Create a workspace just for this app (e.g. "catena-plain"), set its monthly spend limit, and create the API key inside it. Once the workspace reaches its limit, Claude refuses further requests from that key until the month resets, and the app shows "monthly spending limit reached". Nothing in this app can go past that number, and your other projects keep the rest of your organization's budget.
 

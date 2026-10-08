@@ -1,16 +1,15 @@
 import { createHash } from "crypto";
 import { NextRequest } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
 import { codeKey } from "@/lib/auth";
 import { CatenaError, fetchCatenaText, isCommentaryUrl, parseCatenaUrl } from "@/lib/catena";
 import { cacheGet, cacheSet, recordSpend, reserve } from "@/lib/limits";
+import { config, friendlyError, streamCompletion } from "@/lib/llm";
 import { buildUserPrompt, Lang, Level, SYSTEM } from "@/lib/prompt";
 import { fail, requireCode } from "../_shared";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-haiku-5-5";
 const MAX_OUTPUT_TOKENS = Math.min(Number(process.env.MAX_OUTPUT_TOKENS) || 2500, 6000);
 const MAX_INPUT_CHARS = Math.min(Number(process.env.MAX_INPUT_CHARS) || 15000, 40000);
 
@@ -20,7 +19,9 @@ const sha = (s: string) => createHash("sha256").update(s).digest("hex").slice(0,
 export async function POST(req: NextRequest) {
   const auth = await requireCode(req);
   if ("res" in auth) return auth.res;
-  if (!process.env.ANTHROPIC_API_KEY) return fail(503, "The app isn't set up yet: the API key is missing.");
+
+  const cfg = config();
+  if (!cfg.ok) return fail(503, cfg.error);
 
   let body: Record<string, unknown>;
   try {
@@ -58,7 +59,7 @@ export async function POST(req: NextRequest) {
 
   // A commentary already turned into plain language is served from the cache,
   // so the group only ever pays for it once.
-  const cacheKey = sha([canonical || `text:${sha(pasted)}`, lang, level, MODEL].join("|"));
+  const cacheKey = sha([canonical || `text:${sha(pasted)}`, lang, level, cfg.model].join("|"));
   const cached = await cacheGet(cacheKey);
   if (cached) {
     return new Response(cached, {
@@ -84,7 +85,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const client = new Anthropic();
   const userPrompt = buildUserPrompt({ text, fromPage: !pasted, pageTitle, verse, father, lang, level });
 
   const encoder = new TextEncoder();
@@ -95,23 +95,20 @@ export async function POST(req: NextRequest) {
       let answer = "";
       let failed = false;
       try {
-        const s = client.messages.stream(
-          {
-            model: MODEL,
-            max_tokens: MAX_OUTPUT_TOKENS,
-            system: SYSTEM,
-            messages: [{ role: "user", content: userPrompt }],
+        const result = await streamCompletion(cfg, {
+          system: SYSTEM,
+          user: userPrompt,
+          maxTokens: MAX_OUTPUT_TOKENS,
+          signal: req.signal,
+          onDelta: (d) => {
+            answer += d;
+            controller.enqueue(encoder.encode(d));
           },
-          { signal: req.signal },
-        );
-        s.on("text", (delta) => {
-          answer += delta;
-          controller.enqueue(encoder.encode(delta));
         });
-        const final = await s.finalMessage();
-        usageIn = final.usage.input_tokens;
-        usageOut = final.usage.output_tokens;
-        if (final.stop_reason === "max_tokens") {
+        usageIn = result.usageIn;
+        usageOut = result.usageOut;
+        if (!result.text.trim()) throw new Error("empty response");
+        if (result.truncated) {
           failed = true; // don't cache a half answer
           controller.enqueue(encoder.encode("\n\n_(Cut short — try a shorter passage.)_"));
         }
@@ -122,8 +119,10 @@ export async function POST(req: NextRequest) {
         }
       } catch (e) {
         failed = true;
-        const msg = e instanceof Anthropic.APIError ? friendlyApiError(e) : "Something went wrong. Try again.";
-        controller.enqueue(encoder.encode(`\n\n[[ERROR]] ${msg}`));
+        const aborted = (e as Error)?.name === "AbortError" || req.signal.aborted;
+        if (!aborted) {
+          controller.enqueue(encoder.encode(`\n\n[[ERROR]] ${friendlyError(e, cfg.label)}`));
+        }
       } finally {
         try {
           await recordSpend(usageIn, usageOut);
@@ -139,13 +138,4 @@ export async function POST(req: NextRequest) {
   return new Response(stream, {
     headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store", "x-cache": "miss" },
   });
-}
-
-function friendlyApiError(e: InstanceType<typeof Anthropic.APIError>): string {
-  const m = (e.message || "").toLowerCase();
-  if (m.includes("usage limit")) return "The app's monthly spending limit has been reached. It resets next month.";
-  if (e.status === 429) return "Too busy right now. Wait a minute and try again.";
-  if (e.status === 401) return "The app's API key isn't valid. Tell the person who runs the app.";
-  if (e.status === 529 || (e.status ?? 0) >= 500) return "Claude is busy right now. Try again shortly.";
-  return "Claude couldn't process this. Try a different or shorter passage.";
 }
