@@ -224,6 +224,8 @@ export default function Home() {
         j.path,
         j.httpStatus && `HTTP ${j.httpStatus}`,
         j.stage && !j.ok && `stage: ${j.stage}`,
+        j.keyShape && `key: ${j.keyShape}`,
+        j.auth && `auth: ${j.auth}`,
         j.cache && `cache: ${j.cache}`,
       ]
         .filter(Boolean)

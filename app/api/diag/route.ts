@@ -34,11 +34,28 @@ export async function POST(req: NextRequest) {
   // Step 0 — for Gemini, ask Google which models this key may actually use.
   // That settles both "is the key valid" and "is the model name right".
   if (cfg.provider === "gemini") {
+    base.keyShape = describeKey(cfg.apiKey);
     try {
       // Derived from the configured base URL (".../v1beta/openai" -> ".../v1beta/models")
       // rather than hardcoded, so a custom endpoint is checked too.
-      const modelsUrl = `${(cfg.baseURL ?? "").replace(/\/openai$/, "")}/models?key=${encodeURIComponent(cfg.apiKey)}&pageSize=200`;
-      const res = await fetch(modelsUrl, { signal: AbortSignal.timeout(25_000) });
+      const root = (cfg.baseURL ?? "").replace(/\/openai$/, "");
+      // Google accepts an API key as a query parameter or as a header. Try both,
+      // because a 401 on one and not the other means something quite different.
+      let res = await fetch(`${root}/models?key=${encodeURIComponent(cfg.apiKey)}&pageSize=200`, {
+        signal: AbortSignal.timeout(25_000),
+      });
+      let how = "key query parameter";
+      if (res.status === 401 || res.status === 403) {
+        const alt = await fetch(`${root}/models?pageSize=200`, {
+          headers: { "x-goog-api-key": cfg.apiKey },
+          signal: AbortSignal.timeout(25_000),
+        });
+        if (alt.ok) {
+          res = alt;
+          how = "x-goog-api-key header";
+        }
+      }
+      base.auth = how;
       const text = await res.text();
       if (!res.ok) {
         return NextResponse.json({
@@ -46,7 +63,9 @@ export async function POST(req: NextRequest) {
           stage: "key",
           ...base,
           httpStatus: res.status,
-          message: `Google rejected the API key (HTTP ${res.status}). Check LLM_API_KEY.`,
+          message:
+            `Google would not accept this key (HTTP ${res.status}). It must be an API key from Google AI Studio — ` +
+            `those begin "AIza". An OAuth client ID or secret, or a key whose project lacks the Generative Language API, fails like this.`,
           body: scrub(text || "(no error text)").slice(0, 400),
         });
       }
@@ -144,6 +163,24 @@ export async function POST(req: NextRequest) {
       body: scrub(e instanceof Error ? e.message : String(e)).slice(0, 400),
     });
   }
+}
+
+/**
+ * Enough to tell an AI Studio key from something else, without revealing it:
+ * the first four characters and the length. A Gemini key looks like
+ * "AIza… (39 chars)"; an OAuth client secret or a stray value will not.
+ */
+function describeKey(key: string): string {
+  const kind = key.startsWith("AIza")
+    ? "looks like an AI Studio key"
+    : /^GOCSPX-/.test(key)
+      ? "looks like an OAuth client SECRET — wrong credential type"
+      : /\.apps\.googleusercontent\.com$/.test(key)
+        ? "looks like an OAuth client ID — wrong credential type"
+        : key.startsWith("ya29.")
+          ? "looks like a short-lived OAuth token — wrong credential type"
+          : "does not look like an AI Studio key";
+  return `${key.slice(0, 4)}… (${key.length} chars, ${kind})`;
 }
 
 function safeHost(url: string): string {
