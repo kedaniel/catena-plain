@@ -24,6 +24,12 @@ The app talks to Claude **or** to any OpenAI-compatible provider, so it can run 
 
 Model names and free-tier limits change, so check the provider's own console for the current model name. If the name is wrong the app says so plainly rather than failing silently.
 
+**Setup check.** The page has a collapsed "Setup check" section at the bottom with a **Test connection** button. It probes the provider's endpoint directly, then runs the same streaming call the app uses, and reports the provider, model, request path, HTTP status and the provider's own error text. Use it first whenever something doesn't work; full errors also go to Vercel → your project → Logs.
+
+**Reasoning models.** Gemini 3 models think before they write, and that thinking is charged against the answer budget. Too small a budget and the model spends it all thinking and returns nothing, so the app defaults to 8000 output tokens for Gemini instead of 2500.
+
+**Base URLs.** Any trailing slash on `LLM_BASE_URL` is stripped, because the OpenAI SDK appends `/chat/completions` and a double slash makes Google return an empty HTTP 400.
+
 Quality differs by provider. The prompt is the same for all of them: keep every point in the Father's order, add no interpretation, flag unclear phrases. A smaller model follows that less exactly, so the "check against the original" note on the page matters more, not less.
 
 ## Two versions

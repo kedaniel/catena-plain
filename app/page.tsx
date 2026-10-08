@@ -217,10 +217,18 @@ export default function Home() {
         return;
       }
       const head = `${j.ok ? "✓" : "✗"} ${j.message ?? ""}`;
-      const detail = [j.provider && `provider: ${j.provider}`, j.model && `model: ${j.model}`, j.endpoint, j.cache && `cache: ${j.cache}`]
+      const detail = [
+        j.provider && `provider: ${j.provider}`,
+        j.model && `model: ${j.model}`,
+        j.endpoint,
+        j.path,
+        j.httpStatus && `HTTP ${j.httpStatus}`,
+        j.stage && !j.ok && `stage: ${j.stage}`,
+        j.cache && `cache: ${j.cache}`,
+      ]
         .filter(Boolean)
         .join(" · ");
-      setDiag(`${head}\n${detail}`);
+      setDiag([head, detail, j.body].filter(Boolean).join("\n"));
     } catch {
       setDiag(t.offline);
     }

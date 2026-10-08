@@ -21,7 +21,10 @@ type Preset = { baseURL: string; defaultModel?: string; label: string; thinks?: 
 
 const PRESETS: Record<Exclude<ProviderName, "anthropic">, Preset> = {
   gemini: {
-    baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+    // No trailing slash: the OpenAI SDK appends "/chat/completions", and a
+    // trailing slash here can produce a double slash, which Google answers
+    // with an empty 400.
+    baseURL: "https://generativelanguage.googleapis.com/v1beta/openai",
     defaultModel: "gemini-3.8-flash",
     label: "Google Gemini",
     // Gemini 3 models reason before answering, and that reasoning is charged
@@ -71,17 +74,19 @@ export function config(): Config {
       ok: true,
       provider,
       label: "Claude",
-      model: process.env.ANTHROPIC_MODEL || "claude-haiku-5-5",
-      apiKey,
+      model: (process.env.ANTHROPIC_MODEL || "claude-haiku-5-5").trim(),
+      apiKey: apiKey.trim(),
       thinks: false,
     };
   }
 
   const preset = PRESETS[provider];
-  const apiKey = process.env.LLM_API_KEY;
+  // Trimmed: a key pasted into a dashboard easily picks up a space or newline,
+  // which makes the Authorization header invalid.
+  const apiKey = (process.env.LLM_API_KEY || "").trim();
   if (!apiKey) return { ok: false, error: "The app isn't set up yet: LLM_API_KEY is missing." };
 
-  const baseURL = (process.env.LLM_BASE_URL || preset.baseURL).trim();
+  const baseURL = (process.env.LLM_BASE_URL || preset.baseURL).trim().replace(/\/+$/, "");
   if (!baseURL) {
     return { ok: false, error: "The app isn't set up yet: LLM_BASE_URL is missing for this provider." };
   }
