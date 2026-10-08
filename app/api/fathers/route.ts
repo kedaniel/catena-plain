@@ -3,7 +3,7 @@ import { codeKey } from "@/lib/auth";
 import { bookById } from "@/lib/books";
 import { CatenaError, fetchFathers } from "@/lib/catena";
 import { reserve } from "@/lib/limits";
-import { fail, requireCode } from "../_shared";
+import { fail, personKey, requireCode } from "../_shared";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
   if (!query) return fail(400, "Choose a book, chapter and verse.");
 
   // Guards Catena against a flood from this app, though no credits are spent.
-  const gate = await reserve(codeKey(auth.session.code));
+  const gate = await reserve(codeKey(auth.session.code), personKey(req));
   if (!gate.ok) return fail(gate.status, gate.message);
 
   try {

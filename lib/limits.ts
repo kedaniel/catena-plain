@@ -19,8 +19,8 @@ const num = (v: string | undefined, d: number) => {
 
 export const LIMITS = {
   monthlyBudgetUsd: num(process.env.MONTHLY_BUDGET_USD, 5),
-  dailyRequests: num(process.env.DAILY_REQUEST_LIMIT, 150),
-  perCodePerHour: num(process.env.PER_CODE_HOURLY_LIMIT, 15),
+  dailyRequests: num(process.env.DAILY_REQUEST_LIMIT, 500),
+  perCodePerHour: num(process.env.PER_PERSON_HOURLY_LIMIT || process.env.PER_CODE_HOURLY_LIMIT, 20),
   badCodeAttemptsPerHour: 10,
   // Prices per million tokens, used to estimate spend. Defaults: Claude Haiku 5.5 (prompts under 100K tokens).
   inputPricePerMTok: num(process.env.INPUT_PRICE_PER_MTOK, 0.1),
@@ -60,6 +60,15 @@ const hour = () => new Date().toISOString().slice(0, 13);
 
 export type LimitResult = { ok: true } | { ok: false; status: number; message: string };
 
+/**
+ * The hourly allowance belongs to a PERSON, not to a code. A group sharing one
+ * code would otherwise share one bucket, and whoever read first would lock the
+ * others out. Each browser gets its own id, so each reader gets their own
+ * allowance. Clearing browser data resets it — this is for fairness between
+ * friends, not a security boundary; the daily cap and the monthly budget are
+ * what actually protect the bill.
+ */
+
 /** Count a wrong access code from this IP; true if the IP is now locked out. */
 export async function noteBadCode(ip: string): Promise<boolean> {
   const n = await incr(`bad:${ip}:${hour()}`, 3600);
@@ -72,8 +81,8 @@ export async function isLockedOut(ip: string): Promise<boolean> {
   return n >= LIMITS.badCodeAttemptsPerHour;
 }
 
-/** Check every soft cap before calling Claude, and count this request. */
-export async function reserve(codeKey: string): Promise<LimitResult> {
+/** Check every soft cap before calling the model, and count this request. */
+export async function reserve(codeKey: string, personKey?: string): Promise<LimitResult> {
   if (redis) {
     const spent = Number((await redis.get(`spend:${month()}`)) ?? 0);
     if (spent >= LIMITS.monthlyBudgetUsd) {
@@ -88,9 +97,14 @@ export async function reserve(codeKey: string): Promise<LimitResult> {
   if (today > LIMITS.dailyRequests) {
     return { ok: false, status: 429, message: "The app has reached today's limit. Try again tomorrow." };
   }
-  const mine = await incr(`code:${codeKey}:${hour()}`, 3600);
+  const who = personKey ? `${codeKey}:${personKey}` : codeKey;
+  const mine = await incr(`who:${who}:${hour()}`, 3600);
   if (mine > LIMITS.perCodePerHour) {
-    return { ok: false, status: 429, message: "You've made a lot of requests this hour. Try again a bit later." };
+    return {
+      ok: false,
+      status: 429,
+      message: `You've read ${LIMITS.perCodePerHour} commentaries this hour, which is this app's limit per person. Try again a bit later.`,
+    };
   }
   return { ok: true };
 }

@@ -12,6 +12,15 @@ export function clientIp(req: NextRequest): string {
 
 export const fail = (status: number, message: string) => NextResponse.json({ error: message }, { status });
 
+/**
+ * Who is asking, for the per-person hourly allowance: the id this browser
+ * generated for itself, falling back to the network address.
+ */
+export function personKey(req: NextRequest): string {
+  const id = (req.headers.get("x-device-id") ?? "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
+  return id.length >= 8 ? id : `ip:${clientIp(req)}`;
+}
+
 /** Returns the signed-in session, or a ready error response. */
 export async function requireCode(req: NextRequest): Promise<{ session: Session } | { res: NextResponse }> {
   if (!accessCodesConfigured()) {

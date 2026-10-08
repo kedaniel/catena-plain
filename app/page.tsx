@@ -10,6 +10,7 @@ type FatherOption = { url: string; father: string; work: string; preview: string
 type BookOption = { id: string; en: string; ar: string };
 
 const CODE_KEY = "theobiblia-access-code";
+const DEVICE_KEY = "theobiblia-device-id";
 const ERROR_MARK = "[[ERROR]]";
 
 function readCode(): string {
@@ -19,6 +20,28 @@ function readCode(): string {
     return "";
   }
 }
+/**
+ * A per-browser id, so each person in the group gets their own hourly
+ * allowance even when everyone signs in with the same code.
+ */
+function deviceId(): string {
+  try {
+    let id = localStorage.getItem(DEVICE_KEY);
+    if (!id) {
+      id =
+        (crypto.randomUUID?.() ?? `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`).replace(
+          /[^A-Za-z0-9_-]/g,
+          "",
+        );
+      localStorage.setItem(DEVICE_KEY, id);
+    }
+    return id;
+  } catch {
+    // Private browsing: the request simply falls back to the network address.
+    return "";
+  }
+}
+
 function saveCode(c: string) {
   try {
     if (c) localStorage.setItem(CODE_KEY, c);
@@ -125,7 +148,7 @@ export default function Home() {
     try {
       const r = await fetch("/api/fathers", {
         method: "POST",
-        headers: { "content-type": "application/json", "x-access-code": code },
+        headers: { "content-type": "application/json", "x-access-code": code, "x-device-id": deviceId() },
         body: JSON.stringify(usingLink ? { verse: link.trim() } : { book, chapter, verse: verseNo }),
       });
       const j = await r.json().catch(() => ({}));
@@ -171,7 +194,7 @@ export default function Home() {
     try {
       const r = await fetch("/api/plain", {
         method: "POST",
-        headers: { "content-type": "application/json", "x-access-code": code },
+        headers: { "content-type": "application/json", "x-access-code": code, "x-device-id": deviceId() },
         body: JSON.stringify({ ...payload, lang }),
         signal: ctl.current.signal,
       });

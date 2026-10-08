@@ -5,7 +5,7 @@ import { CatenaError, fetchCatenaText, isCommentaryUrl, parseCatenaUrl } from "@
 import { cacheGet, cacheSet, recordSpend, reserve } from "@/lib/limits";
 import { config, friendlyError, streamCompletion } from "@/lib/llm";
 import { buildUserPrompt, Lang, Level, PROMPT_VERSION, SYSTEM } from "@/lib/prompt";
-import { fail, requireCode } from "../_shared";
+import { fail, personKey, requireCode } from "../_shared";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const gate = await reserve(codeKey(auth.session.code));
+  const gate = await reserve(codeKey(auth.session.code), personKey(req));
   if (!gate.ok) return fail(gate.status, gate.message);
 
   let text = pasted;

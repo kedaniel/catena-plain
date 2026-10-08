@@ -90,8 +90,8 @@ To keep the app at 10% of your budget: if your organization spend limit is $50/m
 | Setting | Default | What it does |
 |---|---|---|
 | `MONTHLY_BUDGET_USD` | 5 | Estimated spend from token usage; the app stops at this amount. Set it slightly under the workspace limit. |
-| `DAILY_REQUEST_LIMIT` | 150 | Requests per day for the whole app. |
-| `PER_CODE_HOURLY_LIMIT` | 15 | Requests per hour per access code. |
+| `DAILY_REQUEST_LIMIT` | 500 | Requests per day for the whole app. |
+| `PER_PERSON_HOURLY_LIMIT` | 20 | Requests per hour **per person**. Each browser gets its own id, so a group sharing one code does not share one bucket. Clearing browser data resets it — this is fairness between friends, not a security boundary. |
 | Wrong-code lockout | 10/hour | An IP that enters 10 wrong codes is blocked for the rest of the hour. |
 
 Inputs are capped at 15,000 characters and answers at 2,500 tokens.
