@@ -1,3 +1,5 @@
+import { arabicFatherName } from "./fathers";
+
 export type Lang = "en" | "ar" | "both";
 export type Level = "simple" | "study";
 
@@ -5,7 +7,7 @@ export type Level = "simple" | "study";
  * Bumped whenever the prompt changes shape, so cached answers in the old shape
  * are never served alongside new ones.
  */
-export const PROMPT_VERSION = "v5-excerpt-scoped";
+export const PROMPT_VERSION = "v6-father-names";
 
 export const SYSTEM = `You help church study groups read Church Fathers' commentaries from the Catena Bible app. Catena uses old 19th-century English translations that are hard for modern readers.
 
@@ -41,7 +43,9 @@ const LANG_RULE: Record<Lang, string> = {
   en: "Write everything in clear, modern English.",
   ar: `Write everything in clear Modern Standard Arabic, the way an Arabic-speaking (e.g. Coptic) church Bible study would explain it. Quote Bible verses in the Van Dyck Arabic Bible wording. Use these Arabic headings instead of the English ones:
 ## النص الكامل بلغة بسيطة
-## الملخص`,
+## الملخص
+
+Never invent an Arabic spelling for a name. Where a Father's Arabic name is given below, use it exactly. For any other person or place whose standard Arabic name you are not sure of, write the name in Latin letters inside the Arabic text rather than guessing a transliteration.`,
   both: `Give the full text twice: first in clear modern English under "## Full text in plain language", then the SAME full rendering in clear Modern Standard Arabic under "## النص الكامل بلغة بسيطة". Both must be complete, not summaries. Then write "## Summary" once in English, followed by "## الملخص" in Arabic.`,
 };
 
@@ -69,6 +73,9 @@ export function buildUserPrompt(opts: {
     "",
     opts.verse ? `Verse: ${opts.verse}` : "",
     opts.father ? `Author: ${opts.father}` : "",
+    opts.lang !== "en" && opts.father && arabicFatherName(opts.father)
+      ? `Write this author's name in Arabic exactly as: ${arabicFatherName(opts.father)}`
+      : "",
     opts.pageTitle ? `Page title: ${opts.pageTitle}` : "",
     opts.fromPage
       ? "The text below was taken from a Catena commentary web page and may also contain menus, the Bible verse, or other page text. Use only the Father's commentary itself. If no commentary is present, reply with one line saying the commentary text could not be found on the page."

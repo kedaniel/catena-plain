@@ -121,6 +121,10 @@ Catena indexes long works by every passage they mention. Chrysostom's homily on 
 
 The verse page's excerpt is the opening of the portion that belongs to the verse, so the app carries it through and uses it to find where that portion starts, dropping everything before it. Quote style, dashes and spacing are normalised first, since Catena's excerpt and its page body differ. The search runs over the whole page before any length cap is applied: a homily's moral section sits at its end, so capping first cut away the very part being looked for. If the excerpt cannot be found the full page is kept rather than risking the loss of real content, and the model is told which opening words mark the relevant part and asked to stop when the author moves on. As a last line of defence it must say which passage the text actually discusses, and flag a mismatch.
 
+## Arabic names
+
+A small model asked to render "Ambrose of Milan" in Arabic invents a transliteration, and one run produced an unreadable "القديسبر وساور سين". `lib/fathers.ts` holds the forms an Arabic-speaking church actually uses for the Fathers Catena carries most often, and the matching name is handed to the model rather than left to guesswork. For anyone not on that list the model is told to keep the name in Latin letters instead of inventing a spelling. Add names to that file as you meet them.
+
 ## Faithfulness
 
 The prompt tells Claude to keep every point in the Father's order, add no interpretation, flag unclear phrases instead of guessing, and work only from the text provided. Simplifying can still soften precise theological wording, so the page reminds readers to check against the original.
