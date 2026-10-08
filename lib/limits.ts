@@ -135,3 +135,26 @@ export async function cacheSet(key: string, value: string): Promise<void> {
     /* caching is best effort */
   }
 }
+
+/**
+ * Which URL code Catena actually accepts for a book. Learned on first use, so a
+ * wrong guess costs one extra request once rather than on every lookup.
+ */
+export async function rememberBookCode(book: string, code: string): Promise<void> {
+  if (!redis) return;
+  try {
+    await redis.set(`book:${book}`, code, { ex: 60 * 60 * 24 * 365 });
+  } catch {
+    /* best effort */
+  }
+}
+
+export async function recallBookCode(book: string): Promise<string | null> {
+  if (!redis) return null;
+  try {
+    const v = await redis.get<string>(`book:${book}`);
+    return typeof v === "string" && v ? v : null;
+  } catch {
+    return null;
+  }
+}

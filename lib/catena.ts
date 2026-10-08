@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import { parseReference } from "./books";
+import { recallBookCode, rememberBookCode } from "./limits";
 
 const MAX_BYTES = 2_500_000;
 const MAX_TEXT = 20_000;
@@ -52,7 +53,10 @@ async function get(u: URL): Promise<{ $: cheerio.CheerioAPI; url: URL }> {
     break;
   }
   if (!res) throw new CatenaError("Couldn't reach Catena.");
-  if (res.status === 404) throw new CatenaError("Catena has no page at that address.");
+  if (res.status === 404)
+    throw new CatenaError(
+      "Catena doesn't have a page for that verse. Check the chapter and verse numbers, or paste the verse's link from Catena.",
+    );
   if (!res.ok) throw new CatenaError(`Catena didn't return the page (status ${res.status}).`);
   const buf = await res.arrayBuffer();
   if (buf.byteLength > MAX_BYTES) throw new CatenaError("That page is too large to read.");
@@ -65,6 +69,11 @@ async function get(u: URL): Promise<{ $: cheerio.CheerioAPI; url: URL }> {
  * ("John 3:16"). Returns candidates to try in order.
  */
 export function verseUrlCandidates(raw: string): URL[] {
+  return verseLookup(raw).urls;
+}
+
+/** The pages to try for a verse, plus the book key used to cache the winner. */
+export function verseLookup(raw: string): { urls: URL[]; bookKey?: string; chapter?: number; verse?: number } {
   const s = raw.trim();
   const mk = (code: string, ch: number | string, v: number | string) =>
     new URL(`https://catenabible.com/verse/nkjv/${code}/${ch}/${v}`);
@@ -75,7 +84,8 @@ export function verseUrlCandidates(raw: string): URL[] {
     // Find <book>/<chapter>/<verse> anywhere in the path.
     for (let i = 0; i + 2 < parts.length + 1; i++) {
       const [b, c, v] = [parts[i], parts[i + 1], parts[i + 2]];
-      if (b && /^\d{1,3}$/.test(c ?? "") && /^\d{1,3}$/.test(v ?? "")) return [mk(b, c, v)];
+      // A pasted link already names the book, so there is nothing to guess.
+      if (b && /^\d{1,3}$/.test(c ?? "") && /^\d{1,3}$/.test(v ?? "")) return { urls: [mk(b, c, v)] };
     }
     throw new CatenaError(
       "That link doesn't point to a verse. Open the verse in Catena and copy its link, or type a verse like John 3:16.",
@@ -88,7 +98,12 @@ export function verseUrlCandidates(raw: string): URL[] {
       "I couldn't read that verse. Try the form John 3:16, or paste the verse's link from Catena.",
     );
   }
-  return ref.codes.map((c) => mk(c, ref.chapter, ref.verse));
+  return {
+    urls: ref.codes.map((c) => mk(c, ref.chapter, ref.verse)),
+    bookKey: ref.codes[0],
+    chapter: ref.chapter,
+    verse: ref.verse,
+  };
 }
 
 const clean = (s: string) => s.replace(/\s+/g, " ").trim();
@@ -171,8 +186,19 @@ const MAX_PAGES = 12;
 export async function fetchFathers(
   raw: string,
 ): Promise<{ verse: string; url: string; options: FatherOption[]; pages: number; complete: boolean }> {
-  const candidates = verseUrlCandidates(raw);
+  const lookup = verseLookup(raw);
+  let candidates = lookup.urls;
   let last: CatenaError | null = null;
+
+  // A code already known to work for this book is tried first, so a wrong guess
+  // costs one extra request once rather than on every lookup.
+  if (lookup.bookKey && lookup.chapter && lookup.verse) {
+    const known = await recallBookCode(lookup.bookKey);
+    if (known) {
+      const first = new URL(`https://catenabible.com/verse/nkjv/${known}/${lookup.chapter}/${lookup.verse}`);
+      candidates = [first, ...candidates.filter((u) => u.toString() !== first.toString())];
+    }
+  }
 
   for (const candidate of candidates) {
     let page: { $: cheerio.CheerioAPI; url: URL };
@@ -223,9 +249,18 @@ export async function fetchFathers(
       if (pages >= MAX_PAGES) complete = false;
     }
 
+    if (lookup.bookKey) {
+      const code = url.pathname.split("/").filter(Boolean)[2];
+      if (code) void rememberBookCode(lookup.bookKey, code);
+    }
     return { verse, url: url.toString(), options, pages, complete };
   }
-  throw last ?? new CatenaError("Couldn't read that verse page.");
+  throw (
+    last ??
+    new CatenaError(
+      "Catena doesn't have a page for that verse. Check the chapter and verse numbers, or paste the verse's link from Catena.",
+    )
+  );
 }
 
 /**

@@ -12,8 +12,8 @@ export const BOOKS: Book[] = [
   { en: "Numbers", ar: "العدد", codes: ["nm", "num"], aliases: ["num", "nm", "عدد"] },
   { en: "Deuteronomy", ar: "التثنية", codes: ["dt", "deut"], aliases: ["deut", "dt", "تثنية"] },
   { en: "Joshua", ar: "يشوع", codes: ["jos", "josh"], aliases: ["josh", "jos"] },
-  { en: "Judges", ar: "القضاة", codes: ["jdg", "judg"], aliases: ["judg", "jdg", "قضاة"] },
-  { en: "Ruth", ar: "راعوث", codes: ["rt", "ruth"], aliases: ["rt"] },
+  { en: "Judges", ar: "القضاة", codes: ["jgs", "jdg", "judg"], aliases: ["judg", "jdg", "قضاة"] },
+  { en: "Ruth", ar: "راعوث", codes: ["ru", "rt", "ruth"], aliases: ["rt"] },
   { en: "1 Samuel", ar: "1 صموئيل", codes: ["1sm", "1sam"], aliases: ["1 sam", "1sm", "١ صموئيل"] },
   { en: "2 Samuel", ar: "2 صموئيل", codes: ["2sm", "2sam"], aliases: ["2 sam", "2sm", "٢ صموئيل"] },
   { en: "1 Kings", ar: "1 ملوك", codes: ["1kgs", "1ki"], aliases: ["1 kgs", "1 ki", "١ ملوك"] },
@@ -24,9 +24,9 @@ export const BOOKS: Book[] = [
   { en: "Nehemiah", ar: "نحميا", codes: ["neh"], aliases: ["neh"] },
   { en: "Esther", ar: "أستير", codes: ["est", "esth"], aliases: ["esth", "est", "استير"] },
   { en: "Job", ar: "أيوب", codes: ["jb", "job"], aliases: ["jb", "ايوب"] },
-  { en: "Psalms", ar: "المزامير", codes: ["ps"], aliases: ["psalm", "ps", "pss", "مزمور", "مزامير"] },
+  { en: "Psalms", ar: "المزامير", codes: ["ps", "pss"], aliases: ["psalm", "ps", "pss", "مزمور", "مزامير"] },
   { en: "Proverbs", ar: "الأمثال", codes: ["prv", "prov"], aliases: ["prov", "prv", "امثال"] },
-  { en: "Ecclesiastes", ar: "الجامعة", codes: ["ec", "eccl"], aliases: ["eccl", "eccles", "ec", "جامعة"] },
+  { en: "Ecclesiastes", ar: "الجامعة", codes: ["eccl", "ec"], aliases: ["eccl", "eccles", "ec", "جامعة"] },
   { en: "Song of Songs", ar: "نشيد الأنشاد", codes: ["sg", "song"], aliases: ["song of solomon", "song", "sg", "نشيد"] },
   { en: "Isaiah", ar: "إشعياء", codes: ["is", "isa"], aliases: ["isa", "is", "اشعياء"] },
   { en: "Jeremiah", ar: "إرميا", codes: ["jer"], aliases: ["jer", "ارميا"] },
@@ -49,16 +49,16 @@ export const BOOKS: Book[] = [
   { en: "Mark", ar: "مرقس", codes: ["mk", "mark"], aliases: ["mk"] },
   { en: "Luke", ar: "لوقا", codes: ["lk", "luke"], aliases: ["lk"] },
   { en: "John", ar: "يوحنا", codes: ["jn", "john"], aliases: ["jn"] },
-  { en: "Acts", ar: "أعمال الرسل", codes: ["ac", "acts"], aliases: ["ac", "اعمال", "اعمال الرسل"] },
+  { en: "Acts", ar: "أعمال الرسل", codes: ["acts", "ac"], aliases: ["ac", "اعمال", "اعمال الرسل"] },
   { en: "Romans", ar: "رومية", codes: ["rom", "rm"], aliases: ["rom", "rm"] },
-  { en: "1 Corinthians", ar: "1 كورنثوس", codes: ["1co", "1cor"], aliases: ["1 cor", "1co", "١ كورنثوس"] },
-  { en: "2 Corinthians", ar: "2 كورنثوس", codes: ["2co", "2cor"], aliases: ["2 cor", "2co", "٢ كورنثوس"] },
+  { en: "1 Corinthians", ar: "1 كورنثوس", codes: ["1cor", "1co"], aliases: ["1 cor", "1co", "١ كورنثوس"] },
+  { en: "2 Corinthians", ar: "2 كورنثوس", codes: ["2cor", "2co"], aliases: ["2 cor", "2co", "٢ كورنثوس"] },
   { en: "Galatians", ar: "غلاطية", codes: ["gal"], aliases: ["gal"] },
   { en: "Ephesians", ar: "أفسس", codes: ["eph"], aliases: ["eph", "افسس"] },
   { en: "Philippians", ar: "فيلبي", codes: ["phil", "php"], aliases: ["phil", "php"] },
   { en: "Colossians", ar: "كولوسي", codes: ["col"], aliases: ["col"] },
-  { en: "1 Thessalonians", ar: "1 تسالونيكي", codes: ["1thes", "1th"], aliases: ["1 thess", "1th", "١ تسالونيكي"] },
-  { en: "2 Thessalonians", ar: "2 تسالونيكي", codes: ["2thes", "2th"], aliases: ["2 thess", "2th", "٢ تسالونيكي"] },
+  { en: "1 Thessalonians", ar: "1 تسالونيكي", codes: ["1thes", "1thess", "1th"], aliases: ["1 thess", "1th", "١ تسالونيكي"] },
+  { en: "2 Thessalonians", ar: "2 تسالونيكي", codes: ["2thes", "2thess", "2th"], aliases: ["2 thess", "2th", "٢ تسالونيكي"] },
   { en: "1 Timothy", ar: "1 تيموثاوس", codes: ["1tm", "1tim"], aliases: ["1 tim", "1tm", "١ تيموثاوس"] },
   { en: "2 Timothy", ar: "2 تيموثاوس", codes: ["2tm", "2tim"], aliases: ["2 tim", "2tm", "٢ تيموثاوس"] },
   { en: "Titus", ar: "تيطس", codes: ["ti", "tit"], aliases: ["tit", "ti"] },
@@ -105,8 +105,10 @@ function findBook(name: string): Book | null {
 /** "1 Cor 13:4", "يوحنا ٣:١٦" -> the book's codes plus chapter and verse. */
 export function parseReference(raw: string): { codes: string[]; chapter: number; verse: number } | null {
   const s = normalize(raw);
+  // A roman-numeral prefix must be followed by a space, or "Isaiah" is read as
+  // "I" + "saiah" and never matches a book.
   const m = s.match(
-    /^((?:[1-3]|i{1,3})\s*)?([a-z؀-ۿ][a-z؀-ۿ\s.]*?)\.?\s*(\d{1,3})\s*[:.\s]\s*(\d{1,3})/,
+    /^((?:[1-3]\s*)|(?:i{1,3}\s+))?([a-z؀-ۿ][a-z؀-ۿ\s.]*?)\.?\s*(\d{1,3})\s*[:.\s]\s*(\d{1,3})/,
   );
   if (!m) return null;
   const roman: Record<string, string> = { i: "1", ii: "2", iii: "3" };
