@@ -34,7 +34,6 @@ export const UI = {
     redo: "Redo in this language",
     stop: "Stop",
     out: "Plain version",
-    example: "Example",
     saved: "Saved earlier",
     copy: "Copy",
     copied: "Copied.",
@@ -43,7 +42,7 @@ export const UI = {
     idle: "Pick a Father on the left to see his commentary in plain language.",
     note:
       "This text is produced by AI and nobody has checked it. It can soften careful theological wording or misread an old phrase. Treat it as a reading aid, never as the Father's own words: keep the original beside it, and check anything that matters against the source or ask a priest.",
-    made: "made with love for Theobiblia 26 batch cohort",
+    made: "made with love for Theobiblia'2026 cohort",
     needBook: "Choose a book, chapter and verse.",
     needFather: "Choose a Father first.",
     needText: "Paste the commentary text first.",
@@ -85,7 +84,6 @@ export const UI = {
     redo: "أعد التبسيط",
     stop: "إيقاف",
     out: "النص المبسّط",
-    example: "مثال",
     saved: "محفوظ مسبقًا",
     copy: "نسخ",
     copied: "تم النسخ.",
@@ -93,7 +91,7 @@ export const UI = {
     thinking: "جاري قراءة التفسير",
     idle: "اختر أحد الآباء لتقرأ تفسيره بلغة بسيطة.",
     note: "هذا النص من إنتاج الذكاء الاصطناعي ولم يراجعه أحد. قد يُخفّف دقة الصياغة اللاهوتية أو يُخطئ في فهم عبارة قديمة. اعتبره عونًا على القراءة لا كلام الأب نفسه: احتفظ بالنص الأصلي بجانبه، وراجع ما يهمّك مع النص الأصلي أو مع أب الاعتراف.",
-    made: "صُنع بمحبة لأجل دفعة ثيوبيبليا ٢٦",
+    made: "صُنع بمحبة لأجل دفعة ثيوبيبليا 2026",
     needBook: "اختر السفر والإصحاح والآية.",
     needFather: "اختر أحد الآباء أولًا.",
     needText: "الصق نص التفسير أولًا.",
@@ -105,29 +103,3 @@ export const UI = {
     reenter: "أدخل رمز الدخول مرة أخرى.",
   },
 };
-
-export const EXAMPLE_EN = `**St. Augustine, Confessions I.1** *(example)*
-
-## Full text in plain language
-Lord, you are great, and you deserve all our praise. Your power is great. Your wisdom has no limit or number.
-
-And a human being wants to praise you — a human being, who is only a tiny part of everything you made. A human being who carries his own mortality about with him, who carries the evidence of his sin with him, and who carries the evidence that you stand against the proud. And still, even so, this human being wants to praise you — he who is only a tiny part of what you made.
-
-You are the one who stirs us up, so that praising you becomes a delight to us. You did this because you made us for yourself. And so our heart has no rest in it, and will not rest, until it comes to rest in you.
-
-
-## Summary
-Augustine opens his Confessions by praising God rather than by explaining himself. He sets God's greatness, power and limitless wisdom against what a human being is: a small part of creation, carrying death and sin about with him. The main point is that this small, mortal creature still longs to praise God, and that the longing is God's own doing: he made us for himself, so our hearts stay restless until they rest in him.`;
-
-export const EXAMPLE_AR = `**القديس أغسطينوس، الاعترافات ١:١** *(مثال)*
-
-## النص الكامل بلغة بسيطة
-أيها الرب، أنت عظيم، وتستحق كل التسبيح. قوتك عظيمة، وحكمتك لا حدّ لها ولا عدد.
-
-والإنسان يريد أن يسبّحك — الإنسان الذي هو جزء صغير جدًا من كل ما خلقت. الإنسان الذي يحمل موته معه، ويحمل معه الدليل على خطيئته، ويحمل الدليل على أنك تقاوم المتكبرين. ومع ذلك، هذا الإنسان يريد أن يسبّحك، وهو ليس إلا جزءًا ضئيلًا من خلقك.
-
-أنت الذي توقظنا، حتى يصير تسبيحك فرحًا لنا. وفعلت ذلك لأنك خلقتنا لنفسك. ولذلك لا يجد قلبنا راحة، ولن يجدها، حتى يستقر فيك.
-
-
-## الملخص
-يبدأ أغسطينوس اعترافاته بالتسبيح لا بالحديث عن نفسه. يضع عظمة الله وقوته وحكمته غير المحدودة في مقابل حقيقة الإنسان: جزء صغير من الخلق، يحمل موته وخطيئته معه. والفكرة الرئيسية أن هذا المخلوق الصغير الفاني ما زال يشتاق إلى تسبيح الله، وأن هذا الاشتياق هو من عمل الله نفسه: فقد خلقنا لنفسه، ولذلك يبقى قلبنا بلا راحة حتى يستقر فيه.`;

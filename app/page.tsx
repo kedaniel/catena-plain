@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Markdown from "./Markdown";
-import { EXAMPLE_AR, EXAMPLE_EN, Profile, UI } from "./strings";
+import { Profile, UI } from "./strings";
 
 type Lang = "en" | "ar" | "both";
 type Mode = "verse" | "text";
@@ -51,7 +51,6 @@ export default function Home() {
 
   const [lang, setLang] = useState<Lang>("en");
   const [output, setOutput] = useState("");
-  const [isExample, setIsExample] = useState(true);
   const [fromCache, setFromCache] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<{ msg: string; err?: boolean }>({ msg: "" });
@@ -65,11 +64,6 @@ export default function Home() {
   useEffect(() => {
     if (isAr) setLang("ar");
   }, [isAr]);
-
-  // Show the matching worked example until the first real answer.
-  useEffect(() => {
-    if (isExample) setOutput(isAr ? EXAMPLE_AR : EXAMPLE_EN);
-  }, [isAr, isExample]);
 
   useEffect(() => {
     document.documentElement.lang = isAr ? "ar" : "en";
@@ -167,7 +161,6 @@ export default function Home() {
 
     ctl.current = new AbortController();
     setBusy(true);
-    setIsExample(false);
     setFromCache(false);
     setOutput("");
     setStatus({ msg: "" });
@@ -475,7 +468,6 @@ export default function Home() {
           <div className="out-head">
             <p className="label">{t.out}</p>
             <div className="actions">
-              {isExample && <span className="badge">{t.example}</span>}
               {fromCache && <span className="badge saved">{t.saved}</span>}
               <button onClick={copy} disabled={!output}>
                 {t.copy}
