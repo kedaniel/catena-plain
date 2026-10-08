@@ -398,14 +398,17 @@ export async function fetchCatenaText(
     });
   let text = Array.from(new Set(blocks)).join("\n");
   if (text.length < 200 && metaDesc.length > text.length) text = metaDesc;
-  text = text.slice(0, MAX_TEXT);
 
   if (text.length < 80) {
     throw new CatenaError(
       "I couldn't find commentary text on that page. Open one Father's commentary in Catena, tap Share, and copy that link. Or paste the text instead.",
     );
   }
+
+  // Find the verse's portion in the WHOLE page before any length cap. A
+  // homily's moral section sits at the end, so capping first would cut away the
+  // very part being searched for.
   const scopedText = sliceFromExcerpt(text, excerpt);
   const scoped = scopedText.length < text.length;
-  return { title, text: scopedText, url: url.toString(), scoped };
+  return { title, text: scopedText.slice(0, MAX_TEXT), url: url.toString(), scoped };
 }
