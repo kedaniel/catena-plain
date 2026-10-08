@@ -184,6 +184,22 @@ function nextPageUrl($: cheerio.CheerioAPI, url: URL): URL | null {
 const MAX_PAGES = 6;
 
 /**
+ * Catena renders only the first batch of commentaries into the page and loads
+ * the rest with JavaScript, behind a button reading "Show 12 more (53 left)".
+ * Reading that number lets the app say how many it cannot reach, rather than
+ * presenting a partial list as if it were complete.
+ */
+function hiddenCount($: cheerio.CheerioAPI): number {
+  const text = clean($("body").text());
+  const m =
+    text.match(/show\s+\d+\s+more\s*\((\d+)\s*left\)/i) ??
+    text.match(/\((\d+)\s*left\)/i) ??
+    text.match(/show\s+(\d+)\s+more/i);
+  const n = m ? Number(m[1]) : 0;
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/**
  * The Fathers who commented on a verse, with a link to each commentary.
  *
  * Catena shows only part of a long list at once — some verses have dozens of
@@ -193,7 +209,15 @@ const MAX_PAGES = 6;
  */
 export async function fetchFathers(
   raw: string,
-): Promise<{ verse: string; url: string; options: FatherOption[]; pages: number; complete: boolean }> {
+): Promise<{
+  verse: string;
+  url: string;
+  options: FatherOption[];
+  pages: number;
+  complete: boolean;
+  hidden: number;
+  total: number;
+}> {
   const lookup = verseLookup(raw);
   let candidates = lookup.urls;
   let last: CatenaError | null = null;
@@ -264,11 +288,20 @@ export async function fetchFathers(
       if (pages >= MAX_PAGES) complete = false;
     }
 
+    const hidden = hiddenCount($);
     if (lookup.bookKey) {
       const code = url.pathname.split("/").filter(Boolean)[2];
       if (code) void rememberBookCode(lookup.bookKey, code);
     }
-    return { verse, url: url.toString(), options, pages, complete };
+    return {
+      verse,
+      url: url.toString(),
+      options,
+      pages,
+      complete: complete && hidden === 0,
+      hidden,
+      total: options.length + hidden,
+    };
   }
   if (loadedButEmpty) {
     throw new CatenaError(

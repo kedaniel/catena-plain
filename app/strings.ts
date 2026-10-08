@@ -24,6 +24,8 @@ export const UI = {
     orLink: "Or paste a Catena link",
     linkPlaceholder: "https://catenabible.com/…",
     pickOne: (n: number) => `${n} commentar${n === 1 ? "y" : "ies"} — pick one`,
+    partial: (shown: number, total: number) =>
+      `Showing ${shown} of ${total}. Catena loads the rest only inside its own app — open one there and paste its link above.`,
     moreHint: "If one is missing, open it in Catena and paste its link above.",
     language: "Language",
     langEn: "English",
@@ -74,6 +76,8 @@ export const UI = {
     orLink: "أو الصق رابطًا من Catena",
     linkPlaceholder: "https://catenabible.com/…",
     pickOne: (n: number) => `${n} تفسير — اختر واحدًا`,
+    partial: (shown: number, total: number) =>
+      `يظهر ${shown} من ${total}. يحمّل Catena الباقي داخل تطبيقه فقط — افتح أحدها هناك والصق رابطه أعلاه.`,
     moreHint: "إذا كان أحد التفاسير غير ظاهر، افتحه في Catena والصق رابطه أعلاه.",
     language: "اللغة",
     langEn: "English",

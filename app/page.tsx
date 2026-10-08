@@ -46,6 +46,7 @@ export default function Home() {
 
   const [verseLabel, setVerseLabel] = useState("");
   const [options, setOptions] = useState<FatherOption[]>([]);
+  const [hidden, setHidden] = useState(0);
   const [chosen, setChosen] = useState<FatherOption | null>(null);
   const [looking, setLooking] = useState(false);
 
@@ -118,6 +119,7 @@ export default function Home() {
     setLooking(true);
     setStatus({ msg: "" });
     setOptions([]);
+    setHidden(0);
     setChosen(null);
     setVerseLabel("");
     try {
@@ -134,6 +136,7 @@ export default function Home() {
       }
       setVerseLabel(j.verse ?? "");
       setOptions(j.options ?? []);
+      setHidden(Number(j.hidden) > 0 ? Number(j.hidden) : 0);
       if (!j.options?.length) setStatus({ msg: t.noneFound, err: true });
     } catch {
       setStatus({ msg: t.offline, err: true });
@@ -406,7 +409,9 @@ export default function Home() {
                       </li>
                     ))}
                   </ul>
-                  <p className="hint">{t.moreHint}</p>
+                  <p className="hint">
+                    {hidden > 0 ? t.partial(options.length, options.length + hidden) : t.moreHint}
+                  </p>
                 </div>
               )}
             </>
