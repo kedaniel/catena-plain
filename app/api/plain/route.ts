@@ -33,8 +33,10 @@ export async function POST(req: NextRequest) {
   const pasted = clip(body.text, MAX_INPUT_CHARS + 1);
   const verse = clip(body.verse, 80);
   const father = clip(body.father, 120);
-  const lang: Lang = body.lang === "ar" || body.lang === "both" ? body.lang : "en";
-  const level: Level = body.level === "study" ? "study" : "simple";
+  // The Arabic version always answers in Arabic, whatever the page sends.
+  const lang: Lang =
+    auth.session.profile === "arabic" ? "ar" : body.lang === "ar" || body.lang === "both" ? body.lang : "en";
+  const level: Level = "simple";
 
   if (!link && !pasted) return fail(400, "Choose a commentary, or paste the text.");
   if (pasted.length > MAX_INPUT_CHARS) {
@@ -64,7 +66,7 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const gate = await reserve(codeKey(auth.code));
+  const gate = await reserve(codeKey(auth.session.code));
   if (!gate.ok) return fail(gate.status, gate.message);
 
   let text = pasted;

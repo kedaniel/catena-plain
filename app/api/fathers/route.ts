@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { codeKey } from "@/lib/auth";
+import { bookById } from "@/lib/books";
 import { CatenaError, fetchFathers } from "@/lib/catena";
 import { reserve } from "@/lib/limits";
 import { fail, requireCode } from "../_shared";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
+
+const digits = (v: unknown) => String(v ?? "").replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
 
 /** Lists the Fathers who commented on a verse. Costs nothing: no Claude call. */
 export async function POST(req: NextRequest) {
@@ -18,15 +21,28 @@ export async function POST(req: NextRequest) {
   } catch {
     return fail(400, "Bad request.");
   }
-  const verse = typeof body.verse === "string" ? body.verse.trim().slice(0, 300) : "";
-  if (!verse) return fail(400, "Type a verse, or paste its link from Catena.");
+
+  // Either the book dropdown plus chapter and verse, or a pasted link.
+  let query = "";
+  if (typeof body.book === "string" && body.book !== "") {
+    const book = bookById(body.book);
+    const ch = Number(digits(body.chapter));
+    const v = Number(digits(body.verse));
+    if (!book) return fail(400, "Choose a book.");
+    if (!Number.isInteger(ch) || ch < 1 || ch > 150) return fail(400, "Enter a chapter number.");
+    if (!Number.isInteger(v) || v < 1 || v > 200) return fail(400, "Enter a verse number.");
+    query = `${book.en} ${ch}:${v}`;
+  } else if (typeof body.verse === "string") {
+    query = body.verse.trim().slice(0, 300);
+  }
+  if (!query) return fail(400, "Choose a book, chapter and verse.");
 
   // Guards Catena against a flood from this app, though no credits are spent.
-  const gate = await reserve(codeKey(auth.code));
+  const gate = await reserve(codeKey(auth.session.code));
   if (!gate.ok) return fail(gate.status, gate.message);
 
   try {
-    const found = await fetchFathers(verse);
+    const found = await fetchFathers(query);
     return NextResponse.json(found);
   } catch (e) {
     if (e instanceof CatenaError) return fail(422, e.message);

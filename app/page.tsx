@@ -2,33 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import Markdown from "./Markdown";
+import { EXAMPLE_AR, EXAMPLE_EN, Profile, UI } from "./strings";
 
 type Lang = "en" | "ar" | "both";
-type Level = "simple" | "study";
 type Mode = "verse" | "text";
 type FatherOption = { url: string; father: string; work: string; preview: string };
+type BookOption = { id: string; en: string; ar: string };
 
 const CODE_KEY = "theobiblia-access-code";
 const ERROR_MARK = "[[ERROR]]";
-
-const EXAMPLE = `**St. Augustine, Confessions I.1** *(example)*
-
-## Plain version
-Lord, you are great and you deserve all our praise. Your power is great, and your wisdom has no limit. Human beings want to praise you, even though we are only a tiny part of everything you made. We carry our mortality around with us, and it reminds us of our sin and that you oppose the proud. Even so, we still want to praise you. You stir us up to find joy in praising you, because you made us for yourself, and our hearts cannot rest until they rest in you.
-
-## Words explained
-- **Particle** — a very small part.
-- **Mortality** — the fact that we will die.
-- **Resistest the proud** — "you stand against proud people".
-- **Repose** — rest, be at peace.
-
-## Bible verses mentioned
-- Psalm 145:3 — "Great is the Lord, and greatly to be praised"
-- Psalm 147:5 — his understanding is without number
-- James 4:6 / 1 Peter 5:5 — God resists the proud
-
-## Main point
-We are small, mortal and sinful, yet God made us for himself. That is why we long to praise him, and why nothing else can give our hearts real rest.`;
 
 function readCode(): string {
   try {
@@ -48,29 +30,51 @@ function saveCode(c: string) {
 
 export default function Home() {
   const [code, setCode] = useState("");
+  const [profile, setProfile] = useState<Profile>("full");
+  const [books, setBooks] = useState<BookOption[]>([]);
   const [signedIn, setSignedIn] = useState(false);
   const [checking, setChecking] = useState(true);
   const [codeInput, setCodeInput] = useState("");
   const [codeError, setCodeError] = useState("");
 
   const [mode, setMode] = useState<Mode>("verse");
-  const [verseInput, setVerseInput] = useState("");
+  const [book, setBook] = useState("");
+  const [chapter, setChapter] = useState("");
+  const [verseNo, setVerseNo] = useState("");
+  const [link, setLink] = useState("");
   const [text, setText] = useState("");
+
   const [verseLabel, setVerseLabel] = useState("");
   const [options, setOptions] = useState<FatherOption[]>([]);
   const [chosen, setChosen] = useState<FatherOption | null>(null);
   const [looking, setLooking] = useState(false);
 
   const [lang, setLang] = useState<Lang>("en");
-  const [level, setLevel] = useState<Level>("simple");
-
-  const [output, setOutput] = useState(EXAMPLE);
+  const [output, setOutput] = useState("");
   const [isExample, setIsExample] = useState(true);
   const [fromCache, setFromCache] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<{ msg: string; err?: boolean }>({ msg: "" });
   const ctl = useRef<AbortController | null>(null);
   const outRef = useRef<HTMLDivElement>(null);
+
+  const t = UI[profile];
+  const isAr = profile === "arabic";
+
+  // The Arabic version only ever answers in Arabic.
+  useEffect(() => {
+    if (isAr) setLang("ar");
+  }, [isAr]);
+
+  // Show the matching worked example until the first real answer.
+  useEffect(() => {
+    if (isExample) setOutput(isAr ? EXAMPLE_AR : EXAMPLE_EN);
+  }, [isAr, isExample]);
+
+  useEffect(() => {
+    document.documentElement.lang = isAr ? "ar" : "en";
+    document.documentElement.dir = t.dir;
+  }, [isAr, t.dir]);
 
   useEffect(() => {
     const saved = readCode();
@@ -86,18 +90,20 @@ export default function Home() {
     setCodeError("");
     try {
       const r = await fetch("/api/check", { method: "POST", headers: { "x-access-code": c } });
+      const j = await r.json().catch(() => ({}));
       if (r.ok) {
         setCode(c);
+        setProfile(j.profile === "arabic" ? "arabic" : "full");
+        setBooks(Array.isArray(j.books) ? j.books : []);
         setSignedIn(true);
         saveCode(c);
         return true;
       }
-      const j = await r.json().catch(() => ({}));
-      setCodeError(j.error ?? "That code didn't work.");
+      setCodeError(j.error ?? UI.full.badCode);
       saveCode("");
       return false;
     } catch {
-      setCodeError("Couldn't reach the app. Check your connection.");
+      setCodeError(UI.full.offline);
       return false;
     }
   }
@@ -105,13 +111,14 @@ export default function Home() {
   function handleAuthLoss(message?: string) {
     setSignedIn(false);
     saveCode("");
-    setCodeError(message ?? "Please enter the access code again.");
+    setCodeError(message ?? t.reenter);
   }
 
   async function lookUp() {
-    const q = verseInput.trim();
-    if (!q || looking) {
-      if (!q) setStatus({ msg: "Type a verse, or paste its link from Catena.", err: true });
+    if (looking) return;
+    const usingLink = link.trim() !== "";
+    if (!usingLink && (!book || !chapter.trim() || !verseNo.trim())) {
+      setStatus({ msg: t.needBook, err: true });
       return;
     }
     setLooking(true);
@@ -123,19 +130,19 @@ export default function Home() {
       const r = await fetch("/api/fathers", {
         method: "POST",
         headers: { "content-type": "application/json", "x-access-code": code },
-        body: JSON.stringify({ verse: q }),
+        body: JSON.stringify(usingLink ? { verse: link.trim() } : { book, chapter, verse: verseNo }),
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) {
         if (r.status === 401) handleAuthLoss(j.error);
-        setStatus({ msg: j.error ?? "Couldn't look that up.", err: true });
+        setStatus({ msg: j.error ?? t.generic, err: true });
         return;
       }
       setVerseLabel(j.verse ?? "");
       setOptions(j.options ?? []);
-      if (!j.options?.length) setStatus({ msg: "No commentaries found for that verse.", err: true });
+      if (!j.options?.length) setStatus({ msg: t.noneFound, err: true });
     } catch {
-      setStatus({ msg: "Couldn't reach the app. Check your connection.", err: true });
+      setStatus({ msg: t.offline, err: true });
     } finally {
       setLooking(false);
     }
@@ -144,18 +151,18 @@ export default function Home() {
   async function run(pick?: FatherOption) {
     if (busy) return;
     const target = pick ?? chosen;
-    const payload =
-      mode === "verse"
-        ? { link: target?.url, verse: verseLabel, father: target?.father }
-        : { text: text.trim() };
     if (mode === "verse" && !target) {
-      setStatus({ msg: "Choose a Father first.", err: true });
+      setStatus({ msg: t.needFather, err: true });
       return;
     }
     if (mode === "text" && !text.trim()) {
-      setStatus({ msg: "Paste the commentary text first.", err: true });
+      setStatus({ msg: t.needText, err: true });
       return;
     }
+    const payload =
+      mode === "verse"
+        ? { link: target!.url, verse: verseLabel, father: target!.father }
+        : { text: text.trim() };
     if (pick) setChosen(pick);
 
     ctl.current = new AbortController();
@@ -169,13 +176,13 @@ export default function Home() {
       const r = await fetch("/api/plain", {
         method: "POST",
         headers: { "content-type": "application/json", "x-access-code": code },
-        body: JSON.stringify({ ...payload, lang, level }),
+        body: JSON.stringify({ ...payload, lang }),
         signal: ctl.current.signal,
       });
       if (!r.ok || !r.body) {
         const j = await r.json().catch(() => ({}));
         if (r.status === 401) handleAuthLoss(j.error);
-        setStatus({ msg: j.error ?? "Something went wrong. Try again.", err: true });
+        setStatus({ msg: j.error ?? t.generic, err: true });
         return;
       }
       setFromCache(r.headers.get("x-cache") === "hit");
@@ -192,33 +199,34 @@ export default function Home() {
       const at = acc.indexOf(ERROR_MARK);
       if (at >= 0) setStatus({ msg: acc.slice(at + ERROR_MARK.length).trim(), err: true });
     } catch (e) {
-      if ((e as Error).name === "AbortError") setStatus({ msg: "Stopped." });
-      else setStatus({ msg: "Couldn't reach the app. Check your connection.", err: true });
+      if ((e as Error).name === "AbortError") setStatus({ msg: t.stopped });
+      else setStatus({ msg: t.offline, err: true });
     } finally {
       setBusy(false);
     }
   }
 
   async function copy() {
-    const t = outRef.current?.innerText.trim();
-    if (!t) return;
+    const txt = outRef.current?.innerText.trim();
+    if (!txt) return;
     try {
-      await navigator.clipboard.writeText(t);
-      setStatus({ msg: "Copied." });
+      await navigator.clipboard.writeText(txt);
+      setStatus({ msg: t.copied });
     } catch {
-      setStatus({ msg: "Couldn't copy. Select the text and copy it instead." });
+      setStatus({ msg: t.copyFail });
     }
   }
 
   if (checking) return <main className="wrap" aria-busy="true" />;
 
   if (!signedIn) {
+    const s = UI.full; // the sign-in page can't know the version yet
     return (
       <main className="wrap">
         <header>
           <div>
             <h1>
-              Theobiblia <span>Translator</span>
+              {s.titleA} <span>{s.titleB}</span>
             </h1>
             <p className="sub">Church Fathers&apos; commentaries from Catena, in plain English or Arabic.</p>
           </div>
@@ -231,7 +239,7 @@ export default function Home() {
           }}
         >
           <label className="label" htmlFor="code">
-            Access code
+            {s.codeLabel}
           </label>
           <input
             id="code"
@@ -239,15 +247,15 @@ export default function Home() {
             autoComplete="current-password"
             value={codeInput}
             onChange={(e) => setCodeInput(e.target.value)}
-            placeholder="Enter the code you were given"
+            placeholder={s.codePlaceholder}
           />
           <div className="actions">
             <button className="primary" type="submit">
-              Continue
+              {s.continue}
             </button>
           </div>
           {codeError && <p className="status err">{codeError}</p>}
-          <p className="hint">This app is shared with a small study group. Ask whoever sent you the link for the code.</p>
+          <p className="hint">{s.codeHint}</p>
         </form>
       </main>
     );
@@ -258,12 +266,9 @@ export default function Home() {
       <header>
         <div>
           <h1>
-            Theobiblia <span>Translator</span>
+            {t.titleA} <span>{t.titleB}</span>
           </h1>
-          <p className="sub">
-            Enter a verse, pick a Church Father, and read his commentary in plain language — with the hard words
-            explained, the verses he cites, and his main point.
-          </p>
+          <p className="sub">{t.tagline}</p>
         </div>
         <button
           className="link"
@@ -273,50 +278,94 @@ export default function Home() {
             setCode("");
           }}
         >
-          Sign out
+          {t.signOut}
         </button>
       </header>
 
       <div className="desk">
-        <section className="pane" aria-label="Choose a commentary">
+        <section className="pane" aria-label={t.tabVerse}>
           <div className="tabs" role="tablist">
             <button role="tab" aria-selected={mode === "verse"} onClick={() => setMode("verse")}>
-              By verse
+              {t.tabVerse}
             </button>
             <button role="tab" aria-selected={mode === "text"} onClick={() => setMode("text")}>
-              Paste text
+              {t.tabText}
             </button>
           </div>
 
           {mode === "verse" ? (
             <>
               <form
-                className="row"
+                className="ref-row"
                 onSubmit={(e) => {
                   e.preventDefault();
                   lookUp();
                 }}
               >
-                <input
-                  id="verse"
-                  type="text"
-                  value={verseInput}
-                  onChange={(e) => setVerseInput(e.target.value)}
-                  placeholder="John 3:16 — or paste a Catena link"
-                  aria-label="Verse or Catena link"
-                />
-                <button className="primary" type="submit" disabled={looking} style={{ flex: "0 0 auto" }}>
-                  {looking ? "Looking…" : "Find Fathers"}
-                </button>
+                <div className="field book-field">
+                  <label className="label" htmlFor="book">
+                    {t.book}
+                  </label>
+                  <select id="book" value={book} onChange={(e) => setBook(e.target.value)}>
+                    <option value="">{t.chooseBook}</option>
+                    {books.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {isAr ? b.ar : `${b.en} — ${b.ar}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="field num-field">
+                  <label className="label" htmlFor="chapter">
+                    {t.chapter}
+                  </label>
+                  <input
+                    id="chapter"
+                    type="text"
+                    inputMode="numeric"
+                    value={chapter}
+                    onChange={(e) => setChapter(e.target.value)}
+                    placeholder="3"
+                  />
+                </div>
+                <div className="field num-field">
+                  <label className="label" htmlFor="verseno">
+                    {t.verse}
+                  </label>
+                  <input
+                    id="verseno"
+                    type="text"
+                    inputMode="numeric"
+                    value={verseNo}
+                    onChange={(e) => setVerseNo(e.target.value)}
+                    placeholder="16"
+                  />
+                </div>
+                <div className="field find-field">
+                  <button className="primary" type="submit" disabled={looking}>
+                    {looking ? t.finding : t.find}
+                  </button>
+                </div>
               </form>
+
+              <details className="alt">
+                <summary>{t.orLink}</summary>
+                <input
+                  id="link"
+                  type="url"
+                  inputMode="url"
+                  value={link}
+                  onChange={(e) => setLink(e.target.value)}
+                  placeholder={t.linkPlaceholder}
+                  dir="ltr"
+                />
+              </details>
 
               {verseLabel && <p className="hint">{verseLabel}</p>}
 
               {options.length > 0 && (
                 <div className="fathers">
-                  <p className="label">
-                    {options.length} commentar{options.length === 1 ? "y" : "ies"} — pick one
-                  </p>
+                  <p className="label">{t.pickOne(options.length)}</p>
                   <ul className="father-list">
                     {options.map((o) => (
                       <li key={o.url}>
@@ -332,10 +381,7 @@ export default function Home() {
                       </li>
                     ))}
                   </ul>
-                  <p className="hint">
-                    Catena shows more commentaries behind its &quot;Show more&quot; button than appear here. For one of
-                    those, open it in Catena and paste its link above.
-                  </p>
+                  <p className="hint">{t.moreHint}</p>
                 </div>
               )}
             </>
@@ -345,73 +391,62 @@ export default function Home() {
                 id="text"
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                placeholder="Paste the commentary text here…"
-                aria-label="Commentary text"
+                placeholder={t.textPlaceholder}
+                aria-label={t.tabText}
+                dir="auto"
               />
               <div className="actions">
                 <button className="primary" onClick={() => run()} disabled={busy}>
-                  Make it plain
+                  {t.makePlain}
                 </button>
               </div>
             </>
           )}
 
           <fieldset>
-            <legend className="label">Language</legend>
-            <div className="seg">
-              {(
-                [
-                  ["en", "English"],
-                  ["ar", "العربية"],
-                  ["both", "Both"],
-                ] as const
-              ).map(([v, l]) => (
-                <span key={v}>
-                  <input type="radio" name="lang" id={`l-${v}`} checked={lang === v} onChange={() => setLang(v)} />
-                  <label htmlFor={`l-${v}`}>{l}</label>
-                </span>
-              ))}
-            </div>
+            <legend className="label">{t.language}</legend>
+            {isAr ? (
+              <div className="seg">
+                <span className="locked-lang">{t.langAr}</span>
+              </div>
+            ) : (
+              <div className="seg">
+                {(
+                  [
+                    ["en", t.langEn],
+                    ["ar", t.langAr],
+                    ["both", t.langBoth],
+                  ] as const
+                ).map(([v, l]) => (
+                  <span key={v}>
+                    <input type="radio" name="lang" id={`l-${v}`} checked={lang === v} onChange={() => setLang(v)} />
+                    <label htmlFor={`l-${v}`}>{l}</label>
+                  </span>
+                ))}
+              </div>
+            )}
           </fieldset>
-          <fieldset>
-            <legend className="label">Level</legend>
-            <div className="seg">
-              {(
-                [
-                  ["simple", "Simple"],
-                  ["study", "Bible study"],
-                ] as const
-              ).map(([v, l]) => (
-                <span key={v}>
-                  <input type="radio" name="level" id={`v-${v}`} checked={level === v} onChange={() => setLevel(v)} />
-                  <label htmlFor={`v-${v}`}>{l}</label>
-                </span>
-              ))}
-            </div>
-          </fieldset>
-          {mode === "verse" && chosen && (
+
+          {(chosen || busy) && (
             <div className="actions">
-              <button onClick={() => run()} disabled={busy}>
-                Redo in this language
-              </button>
-              {busy && <button onClick={() => ctl.current?.abort()}>Stop</button>}
-            </div>
-          )}
-          {mode === "text" && busy && (
-            <div className="actions">
-              <button onClick={() => ctl.current?.abort()}>Stop</button>
+              {chosen && mode === "verse" && (
+                <button onClick={() => run()} disabled={busy}>
+                  {t.redo}
+                </button>
+              )}
+              {busy && <button onClick={() => ctl.current?.abort()}>{t.stop}</button>}
             </div>
           )}
         </section>
 
-        <section className="pane" aria-label="Plain version" aria-live="polite">
+        <section className="pane" aria-label={t.out} aria-live="polite">
           <div className="out-head">
-            <p className="label">Plain version</p>
+            <p className="label">{t.out}</p>
             <div className="actions">
-              {isExample && <span className="badge">Example</span>}
-              {fromCache && <span className="badge saved">Saved earlier</span>}
+              {isExample && <span className="badge">{t.example}</span>}
+              {fromCache && <span className="badge saved">{t.saved}</span>}
               <button onClick={copy} disabled={!output}>
-                Copy
+                {t.copy}
               </button>
             </div>
           </div>
@@ -419,19 +454,16 @@ export default function Home() {
             {output ? (
               <Markdown source={output} />
             ) : busy ? (
-              <p className="placeholder thinking">Reading the Father</p>
+              <p className="placeholder thinking">{t.thinking}</p>
             ) : (
-              <p className="placeholder">Pick a Father on the left to see his commentary in plain language.</p>
+              <p className="placeholder">{t.idle}</p>
             )}
           </div>
           {status.msg && <p className={status.err ? "status err" : "status"}>{status.msg}</p>}
         </section>
       </div>
 
-      <p className="note">
-        The plain version can soften careful theological wording. Keep the original beside it, and check anything that
-        sounds surprising against the source or ask a priest.
-      </p>
+      <p className="note">{t.note}</p>
     </main>
   );
 }

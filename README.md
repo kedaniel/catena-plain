@@ -9,13 +9,24 @@ A small web app for a church study group. Enter a Bible verse, pick a Church Fat
 
 It runs on your own Anthropic API key. Your friends don't need a Claude account; they only need the link and the access code.
 
+## Two versions
+
+Which version someone sees depends on the code they sign in with:
+
+| Env var | Version |
+|---|---|
+| `ACCESS_CODES` | Full: English interface, output in English, Arabic or both. |
+| `ARABIC_ACCESS_CODES` | Arabic: right-to-left Arabic interface, output always in Arabic. |
+
+Both accept comma-separated lists. The Arabic version's language is enforced on the server, not just hidden in the page.
+
 ## How people use it
 
-1. Type a verse (`John 3:16`) or paste any Catena verse link.
+1. Pick the book from the dropdown (listed in English and Arabic) and type the chapter and verse. A "paste a Catena link" field is tucked underneath for anything the lookup can't reach.
 2. Tap **Find Fathers**. The app lists the Fathers who commented on that verse.
 3. Tap a Father. His commentary comes back in plain language.
 
-A **Paste text** tab handles anything the lookup can't reach.
+A **Paste text** tab handles text copied straight out of Catena.
 
 Catena's own verse pages render the commentary list server-side at
 `catenabible.com/verse/nkjv/<book>/<chapter>/<verse>`, which is what the app reads. Commentaries hidden behind Catena's "Show more" button aren't in that HTML; for one of those, open it in Catena and paste its own link.
@@ -31,6 +42,7 @@ Every finished plain version is stored, keyed by the commentary, language, level
 3. **Add environment variables** in Vercel → Project → Settings → Environment Variables:
    - `ANTHROPIC_API_KEY` — a key created *inside the dedicated workspace*
    - `ACCESS_CODES` — e.g. `stmark-study-2026` (comma-separate several codes to give each person their own)
+   - `ARABIC_ACCESS_CODES` — optional; codes that get the Arabic version, e.g. `theo-26`
 4. **Add Upstash Redis** (Vercel → Storage / Marketplace → Upstash Redis, free plan) and connect it to the project. This turns on the monthly budget, daily cap and per-person limits.
 5. **Redeploy**, open the URL, enter your code, and try a link.
 

@@ -1,99 +1,121 @@
 /**
- * Maps a typed reference ("John 3:16", "1 Cor 13:4") to the book code Catena
- * uses in its URLs. Several candidates are listed where the scheme is uncertain;
- * the server tries each until a verse page responds.
+ * The 66 books, with the code Catena uses in its URLs. Several codes are listed
+ * where the scheme is uncertain; the server tries each until a page responds.
+ * `en` and `ar` are the display names used by the book dropdown.
  */
-const BOOKS: { names: string[]; codes: string[] }[] = [
-  { names: ["genesis", "gen", "gn", "تكوين", "التكوين"], codes: ["gn", "gen"] },
-  { names: ["exodus", "exod", "ex", "خروج", "الخروج"], codes: ["ex", "exod"] },
-  { names: ["leviticus", "lev", "lv", "لاويين", "اللاويين"], codes: ["lv", "lev"] },
-  { names: ["numbers", "num", "nm", "عدد", "العدد"], codes: ["nm", "num"] },
-  { names: ["deuteronomy", "deut", "dt", "تثنية", "التثنية"], codes: ["dt", "deut"] },
-  { names: ["joshua", "josh", "jos", "يشوع"], codes: ["jos", "josh"] },
-  { names: ["judges", "judg", "jdg", "قضاة", "القضاة"], codes: ["jdg", "judg"] },
-  { names: ["ruth", "rt", "راعوث"], codes: ["rt", "ruth"] },
-  { names: ["1 samuel", "1 sam", "1sm", "1 صموئيل", "١ صموئيل"], codes: ["1sm", "1sam"] },
-  { names: ["2 samuel", "2 sam", "2sm", "2 صموئيل", "٢ صموئيل"], codes: ["2sm", "2sam"] },
-  { names: ["1 kings", "1 kgs", "1 ملوك", "١ ملوك"], codes: ["1kgs", "1ki"] },
-  { names: ["2 kings", "2 kgs", "2 ملوك", "٢ ملوك"], codes: ["2kgs", "2ki"] },
-  { names: ["1 chronicles", "1 chron", "1 chr", "1 اخبار", "1 أخبار"], codes: ["1chr", "1ch"] },
-  { names: ["2 chronicles", "2 chron", "2 chr", "2 اخبار", "2 أخبار"], codes: ["2chr", "2ch"] },
-  { names: ["ezra", "ezr", "عزرا"], codes: ["ezr", "ezra"] },
-  { names: ["nehemiah", "neh", "نحميا"], codes: ["neh"] },
-  { names: ["esther", "esth", "استير", "أستير"], codes: ["est", "esth"] },
-  { names: ["job", "jb", "ايوب", "أيوب"], codes: ["jb", "job"] },
-  { names: ["psalm", "psalms", "ps", "pss", "مزمور", "مزامير", "المزامير"], codes: ["ps"] },
-  { names: ["proverbs", "prov", "prv", "امثال", "أمثال", "الامثال"], codes: ["prv", "prov"] },
-  { names: ["ecclesiastes", "eccl", "eccles", "جامعة", "الجامعة"], codes: ["ec", "eccl"] },
-  { names: ["song of songs", "song of solomon", "song", "sg", "نشيد الانشاد", "نشيد"], codes: ["sg", "song"] },
-  { names: ["isaiah", "isa", "is", "اشعياء", "إشعياء"], codes: ["is", "isa"] },
-  { names: ["jeremiah", "jer", "ارميا", "إرميا"], codes: ["jer"] },
-  { names: ["lamentations", "lam", "مراثي"], codes: ["lam"] },
-  { names: ["ezekiel", "ezek", "ez", "حزقيال"], codes: ["ez", "ezek"] },
-  { names: ["daniel", "dan", "dn", "دانيال"], codes: ["dn", "dan"] },
-  { names: ["hosea", "hos", "هوشع"], codes: ["hos"] },
-  { names: ["joel", "jl", "يوئيل"], codes: ["jl", "joel"] },
-  { names: ["amos", "am", "عاموس"], codes: ["am", "amos"] },
-  { names: ["obadiah", "obad", "عوبديا"], codes: ["ob", "obad"] },
-  { names: ["jonah", "jon", "يونان"], codes: ["jon", "jonah"] },
-  { names: ["micah", "mic", "ميخا"], codes: ["mi", "mic"] },
-  { names: ["nahum", "nah", "ناحوم"], codes: ["na", "nah"] },
-  { names: ["habakkuk", "hab", "حبقوق"], codes: ["hb", "hab"] },
-  { names: ["zephaniah", "zeph", "صفنيا"], codes: ["zep", "zeph"] },
-  { names: ["haggai", "hag", "حجي"], codes: ["hg", "hag"] },
-  { names: ["zechariah", "zech", "زكريا"], codes: ["zec", "zech"] },
-  { names: ["malachi", "mal", "ملاخي"], codes: ["mal"] },
-  { names: ["matthew", "matt", "mt", "متى", "انجيل متى"], codes: ["mt", "matt"] },
-  { names: ["mark", "mk", "مرقس"], codes: ["mk", "mark"] },
-  { names: ["luke", "lk", "لوقا"], codes: ["lk", "luke"] },
-  { names: ["john", "jn", "يوحنا"], codes: ["jn", "john"] },
-  { names: ["acts", "ac", "اعمال", "أعمال", "اعمال الرسل"], codes: ["ac", "acts"] },
-  { names: ["romans", "rom", "rm", "رومية", "الرومية"], codes: ["rom", "rm"] },
-  { names: ["1 corinthians", "1 cor", "1 كورنثوس", "١ كورنثوس"], codes: ["1co", "1cor"] },
-  { names: ["2 corinthians", "2 cor", "2 كورنثوس", "٢ كورنثوس"], codes: ["2co", "2cor"] },
-  { names: ["galatians", "gal", "غلاطية"], codes: ["gal"] },
-  { names: ["ephesians", "eph", "افسس", "أفسس"], codes: ["eph"] },
-  { names: ["philippians", "phil", "php", "فيلبي"], codes: ["phil", "php"] },
-  { names: ["colossians", "col", "كولوسي"], codes: ["col"] },
-  { names: ["1 thessalonians", "1 thess", "1 تسالونيكي"], codes: ["1thes", "1th"] },
-  { names: ["2 thessalonians", "2 thess", "2 تسالونيكي"], codes: ["2thes", "2th"] },
-  { names: ["1 timothy", "1 tim", "1 تيموثاوس"], codes: ["1tm", "1tim"] },
-  { names: ["2 timothy", "2 tim", "2 تيموثاوس"], codes: ["2tm", "2tim"] },
-  { names: ["titus", "tit", "تيطس"], codes: ["ti", "tit"] },
-  { names: ["philemon", "philem", "phlm", "فليمون"], codes: ["phlm", "philem"] },
-  { names: ["hebrews", "heb", "عبرانيين", "العبرانيين"], codes: ["heb"] },
-  { names: ["james", "jas", "يعقوب"], codes: ["jas", "james"] },
-  { names: ["1 peter", "1 pet", "1 بطرس", "١ بطرس"], codes: ["1pt", "1pet"] },
-  { names: ["2 peter", "2 pet", "2 بطرس", "٢ بطرس"], codes: ["2pt", "2pet"] },
-  { names: ["1 john", "1 jn", "1 يوحنا", "١ يوحنا"], codes: ["1jn", "1john"] },
-  { names: ["2 john", "2 jn", "2 يوحنا", "٢ يوحنا"], codes: ["2jn", "2john"] },
-  { names: ["3 john", "3 jn", "3 يوحنا", "٣ يوحنا"], codes: ["3jn", "3john"] },
-  { names: ["jude", "jd", "يهوذا"], codes: ["jude", "jd"] },
-  { names: ["revelation", "rev", "apocalypse", "رؤيا", "الرؤيا", "رويا"], codes: ["rv", "rev"] },
+export type Book = { en: string; ar: string; codes: string[]; aliases: string[] };
+
+export const BOOKS: Book[] = [
+  { en: "Genesis", ar: "التكوين", codes: ["gn", "gen"], aliases: ["gen", "gn", "تكوين"] },
+  { en: "Exodus", ar: "الخروج", codes: ["ex", "exod"], aliases: ["exod", "ex", "خروج"] },
+  { en: "Leviticus", ar: "اللاويين", codes: ["lv", "lev"], aliases: ["lev", "lv", "لاويين"] },
+  { en: "Numbers", ar: "العدد", codes: ["nm", "num"], aliases: ["num", "nm", "عدد"] },
+  { en: "Deuteronomy", ar: "التثنية", codes: ["dt", "deut"], aliases: ["deut", "dt", "تثنية"] },
+  { en: "Joshua", ar: "يشوع", codes: ["jos", "josh"], aliases: ["josh", "jos"] },
+  { en: "Judges", ar: "القضاة", codes: ["jdg", "judg"], aliases: ["judg", "jdg", "قضاة"] },
+  { en: "Ruth", ar: "راعوث", codes: ["rt", "ruth"], aliases: ["rt"] },
+  { en: "1 Samuel", ar: "1 صموئيل", codes: ["1sm", "1sam"], aliases: ["1 sam", "1sm", "١ صموئيل"] },
+  { en: "2 Samuel", ar: "2 صموئيل", codes: ["2sm", "2sam"], aliases: ["2 sam", "2sm", "٢ صموئيل"] },
+  { en: "1 Kings", ar: "1 ملوك", codes: ["1kgs", "1ki"], aliases: ["1 kgs", "1 ki", "١ ملوك"] },
+  { en: "2 Kings", ar: "2 ملوك", codes: ["2kgs", "2ki"], aliases: ["2 kgs", "2 ki", "٢ ملوك"] },
+  { en: "1 Chronicles", ar: "1 أخبار", codes: ["1chr", "1ch"], aliases: ["1 chron", "1 chr", "1 اخبار"] },
+  { en: "2 Chronicles", ar: "2 أخبار", codes: ["2chr", "2ch"], aliases: ["2 chron", "2 chr", "2 اخبار"] },
+  { en: "Ezra", ar: "عزرا", codes: ["ezr", "ezra"], aliases: ["ezr"] },
+  { en: "Nehemiah", ar: "نحميا", codes: ["neh"], aliases: ["neh"] },
+  { en: "Esther", ar: "أستير", codes: ["est", "esth"], aliases: ["esth", "est", "استير"] },
+  { en: "Job", ar: "أيوب", codes: ["jb", "job"], aliases: ["jb", "ايوب"] },
+  { en: "Psalms", ar: "المزامير", codes: ["ps"], aliases: ["psalm", "ps", "pss", "مزمور", "مزامير"] },
+  { en: "Proverbs", ar: "الأمثال", codes: ["prv", "prov"], aliases: ["prov", "prv", "امثال"] },
+  { en: "Ecclesiastes", ar: "الجامعة", codes: ["ec", "eccl"], aliases: ["eccl", "eccles", "ec", "جامعة"] },
+  { en: "Song of Songs", ar: "نشيد الأنشاد", codes: ["sg", "song"], aliases: ["song of solomon", "song", "sg", "نشيد"] },
+  { en: "Isaiah", ar: "إشعياء", codes: ["is", "isa"], aliases: ["isa", "is", "اشعياء"] },
+  { en: "Jeremiah", ar: "إرميا", codes: ["jer"], aliases: ["jer", "ارميا"] },
+  { en: "Lamentations", ar: "مراثي إرميا", codes: ["lam"], aliases: ["lam", "مراثي"] },
+  { en: "Ezekiel", ar: "حزقيال", codes: ["ez", "ezek"], aliases: ["ezek", "ez"] },
+  { en: "Daniel", ar: "دانيال", codes: ["dn", "dan"], aliases: ["dan", "dn"] },
+  { en: "Hosea", ar: "هوشع", codes: ["hos"], aliases: ["hos"] },
+  { en: "Joel", ar: "يوئيل", codes: ["jl", "joel"], aliases: ["jl"] },
+  { en: "Amos", ar: "عاموس", codes: ["am", "amos"], aliases: ["am"] },
+  { en: "Obadiah", ar: "عوبديا", codes: ["ob", "obad"], aliases: ["obad", "ob"] },
+  { en: "Jonah", ar: "يونان", codes: ["jon", "jonah"], aliases: ["jon", "يونس"] },
+  { en: "Micah", ar: "ميخا", codes: ["mi", "mic"], aliases: ["mic", "mi"] },
+  { en: "Nahum", ar: "ناحوم", codes: ["na", "nah"], aliases: ["nah", "na"] },
+  { en: "Habakkuk", ar: "حبقوق", codes: ["hb", "hab"], aliases: ["hab", "hb"] },
+  { en: "Zephaniah", ar: "صفنيا", codes: ["zep", "zeph"], aliases: ["zeph", "zep"] },
+  { en: "Haggai", ar: "حجي", codes: ["hg", "hag"], aliases: ["hag", "hg"] },
+  { en: "Zechariah", ar: "زكريا", codes: ["zec", "zech"], aliases: ["zech", "zec"] },
+  { en: "Malachi", ar: "ملاخي", codes: ["mal"], aliases: ["mal"] },
+  { en: "Matthew", ar: "متى", codes: ["mt", "matt"], aliases: ["matt", "mt", "انجيل متى"] },
+  { en: "Mark", ar: "مرقس", codes: ["mk", "mark"], aliases: ["mk"] },
+  { en: "Luke", ar: "لوقا", codes: ["lk", "luke"], aliases: ["lk"] },
+  { en: "John", ar: "يوحنا", codes: ["jn", "john"], aliases: ["jn"] },
+  { en: "Acts", ar: "أعمال الرسل", codes: ["ac", "acts"], aliases: ["ac", "اعمال", "اعمال الرسل"] },
+  { en: "Romans", ar: "رومية", codes: ["rom", "rm"], aliases: ["rom", "rm"] },
+  { en: "1 Corinthians", ar: "1 كورنثوس", codes: ["1co", "1cor"], aliases: ["1 cor", "1co", "١ كورنثوس"] },
+  { en: "2 Corinthians", ar: "2 كورنثوس", codes: ["2co", "2cor"], aliases: ["2 cor", "2co", "٢ كورنثوس"] },
+  { en: "Galatians", ar: "غلاطية", codes: ["gal"], aliases: ["gal"] },
+  { en: "Ephesians", ar: "أفسس", codes: ["eph"], aliases: ["eph", "افسس"] },
+  { en: "Philippians", ar: "فيلبي", codes: ["phil", "php"], aliases: ["phil", "php"] },
+  { en: "Colossians", ar: "كولوسي", codes: ["col"], aliases: ["col"] },
+  { en: "1 Thessalonians", ar: "1 تسالونيكي", codes: ["1thes", "1th"], aliases: ["1 thess", "1th", "١ تسالونيكي"] },
+  { en: "2 Thessalonians", ar: "2 تسالونيكي", codes: ["2thes", "2th"], aliases: ["2 thess", "2th", "٢ تسالونيكي"] },
+  { en: "1 Timothy", ar: "1 تيموثاوس", codes: ["1tm", "1tim"], aliases: ["1 tim", "1tm", "١ تيموثاوس"] },
+  { en: "2 Timothy", ar: "2 تيموثاوس", codes: ["2tm", "2tim"], aliases: ["2 tim", "2tm", "٢ تيموثاوس"] },
+  { en: "Titus", ar: "تيطس", codes: ["ti", "tit"], aliases: ["tit", "ti"] },
+  { en: "Philemon", ar: "فليمون", codes: ["phlm", "philem"], aliases: ["philem", "phlm"] },
+  { en: "Hebrews", ar: "العبرانيين", codes: ["heb"], aliases: ["heb", "عبرانيين"] },
+  { en: "James", ar: "يعقوب", codes: ["jas", "james"], aliases: ["jas"] },
+  { en: "1 Peter", ar: "1 بطرس", codes: ["1pt", "1pet"], aliases: ["1 pet", "1pt", "١ بطرس"] },
+  { en: "2 Peter", ar: "2 بطرس", codes: ["2pt", "2pet"], aliases: ["2 pet", "2pt", "٢ بطرس"] },
+  { en: "1 John", ar: "1 يوحنا", codes: ["1jn", "1john"], aliases: ["1 jn", "1jn", "١ يوحنا"] },
+  { en: "2 John", ar: "2 يوحنا", codes: ["2jn", "2john"], aliases: ["2 jn", "2jn", "٢ يوحنا"] },
+  { en: "3 John", ar: "3 يوحنا", codes: ["3jn", "3john"], aliases: ["3 jn", "3jn", "٣ يوحنا"] },
+  { en: "Jude", ar: "يهوذا", codes: ["jude", "jd"], aliases: ["jd"] },
+  { en: "Revelation", ar: "الرؤيا", codes: ["rv", "rev"], aliases: ["rev", "apocalypse", "rv", "رؤيا", "رويا"] },
 ];
 
-/** "1 Cor 13:4" -> {codes: ["1co","1cor"], chapter: 13, verse: 4} */
-export function parseReference(raw: string): { codes: string[]; chapter: number; verse: number } | null {
-  const s = raw
+/** For the dropdown: id is stable and safe to send over the wire. */
+export const BOOK_OPTIONS = BOOKS.map((b, i) => ({ id: String(i), en: b.en, ar: b.ar }));
+
+export function bookById(id: string): Book | null {
+  const i = Number(id);
+  return Number.isInteger(i) && i >= 0 && i < BOOKS.length ? BOOKS[i] : null;
+}
+
+const normalize = (t: string) =>
+  t
     .toLowerCase()
     .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
+    .replace(/[أإآ]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ة/g, "ه")
+    .replace(/^(ال)(?=\S{3})/, "")
     .replace(/\s+/g, " ")
     .trim();
-  // Optional leading number (1 John), book name, chapter, separator, verse.
+
+function findBook(name: string): Book | null {
+  const n = normalize(name);
+  for (const b of BOOKS) {
+    const all = [b.en, b.ar, ...b.aliases];
+    if (all.some((a) => normalize(a) === n)) return b;
+  }
+  return null;
+}
+
+/** "1 Cor 13:4", "يوحنا ٣:١٦" -> the book's codes plus chapter and verse. */
+export function parseReference(raw: string): { codes: string[]; chapter: number; verse: number } | null {
+  const s = normalize(raw);
   const m = s.match(
-    /^((?:[1-3]|i{1,3})\s*)?([a-z\u0600-\u06FF][a-z\u0600-\u06FF\s.]*?)\.?\s*(\d{1,3})\s*[:.\s]\s*(\d{1,3})/,
+    /^((?:[1-3]|i{1,3})\s*)?([a-z؀-ۿ][a-z؀-ۿ\s.]*?)\.?\s*(\d{1,3})\s*[:.\s]\s*(\d{1,3})/,
   );
   if (!m) return null;
   const roman: Record<string, string> = { i: "1", ii: "2", iii: "3" };
   const prefixRaw = (m[1] ?? "").trim();
   const prefix = roman[prefixRaw] ?? prefixRaw;
-  const name = `${prefix ? prefix + " " : ""}${m[2].trim()}`.replace(/\s+/g, " ");
+  const name = `${prefix ? prefix + " " : ""}${m[2].trim()}`;
   const chapter = Number(m[3]);
   const verse = Number(m[4]);
-  const bare = name.replace(/[أإآ]/g, "ا").replace(/ى/g, "ي").replace(/ة/g, "ه");
-  const norm = (t: string) => t.replace(/[أإآ]/g, "ا").replace(/ى/g, "ي").replace(/ة/g, "ه");
-  const hit =
-    BOOKS.find((b) => b.names.includes(name)) ?? BOOKS.find((b) => b.names.some((n) => norm(n) === bare));
-  if (!hit || !chapter || !verse) return null;
-  return { codes: hit.codes, chapter, verse };
+  const book = findBook(name);
+  if (!book || !chapter || !verse) return null;
+  return { codes: book.codes, chapter, verse };
 }
