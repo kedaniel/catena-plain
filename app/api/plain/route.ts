@@ -9,7 +9,7 @@ import { fail, requireCode } from "../_shared";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5";
+const MODEL = process.env.ANTHROPIC_MODEL || "claude-haiku-5-5";
 const MAX_OUTPUT_TOKENS = Math.min(Number(process.env.MAX_OUTPUT_TOKENS) || 2500, 6000);
 const MAX_INPUT_CHARS = Math.min(Number(process.env.MAX_INPUT_CHARS) || 15000, 40000);
 

@@ -22,9 +22,9 @@ export const LIMITS = {
   dailyRequests: num(process.env.DAILY_REQUEST_LIMIT, 150),
   perCodePerHour: num(process.env.PER_CODE_HOURLY_LIMIT, 15),
   badCodeAttemptsPerHour: 10,
-  // Prices per million tokens, used to estimate spend. Defaults: Claude Sonnet 5.5.
-  inputPricePerMTok: num(process.env.INPUT_PRICE_PER_MTOK, 2),
-  outputPricePerMTok: num(process.env.OUTPUT_PRICE_PER_MTOK, 10),
+  // Prices per million tokens, used to estimate spend. Defaults: Claude Haiku 5.5 (prompts under 100K tokens).
+  inputPricePerMTok: num(process.env.INPUT_PRICE_PER_MTOK, 0.1),
+  outputPricePerMTok: num(process.env.OUTPUT_PRICE_PER_MTOK, 0.5),
 };
 
 let redis: Redis | null = null;

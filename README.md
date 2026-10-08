@@ -47,7 +47,7 @@ To keep the app at 10% of your budget: if your organization spend limit is $50/m
 
 Inputs are capped at 15,000 characters and answers at 2,500 tokens.
 
-**Rough cost:** a typical commentary is about 2,000 tokens in and 1,500 out. On Claude Sonnet 5.5 ($2 / $10 per million tokens) that's about $0.02 per passage, so $5 covers roughly 250 passages. On Claude Haiku 5.5 it's a small fraction of a cent, at some cost in quality (switch with `ANTHROPIC_MODEL`).
+**Rough cost:** the app uses Claude Haiku 5.5 by default ($0.10 / $0.50 per million tokens for prompts under 100K tokens). A typical commentary is about 2,000 tokens in and 1,500 out, so roughly $0.001 per passage: $1 covers around a thousand passages. For higher quality, set `ANTHROPIC_MODEL=claude-sonnet-5-5` with `INPUT_PRICE_PER_MTOK=2` and `OUTPUT_PRICE_PER_MTOK=10` (about $0.02 per passage).
 
 ## Access codes
 
