@@ -269,7 +269,12 @@ export function friendlyError(e: unknown, cfg: { label: string; model: string })
         : e instanceof OpenAI.APIError
           ? e.status
           : undefined;
-  const raw = e instanceof Error ? e.message : String(e);
+  const raw =
+    e instanceof GeminiError
+      ? `${e.message}${e.body ? ` | ${e.body}` : ""}`
+      : e instanceof Error
+        ? e.message
+        : String(e);
   const msg = raw.toLowerCase();
 
   if (msg.includes("usage limit") || msg.includes("credit balance") || msg.includes("insufficient"))
@@ -284,6 +289,7 @@ export function friendlyError(e: unknown, cfg: { label: string; model: string })
   if (status === 429) return `${label} is rate-limiting the app. Wait a minute and try again.`;
   if (status === 400)
     return `${label} rejected the request. Details: ${scrub(raw)}`;
-  if (status === 529 || (status ?? 0) >= 500) return `${label} is busy right now. Try again shortly.`;
+  if (status === 529 || (status ?? 0) >= 500)
+    return `${label} returned a server error (HTTP ${status}) even after a retry. Details: ${scrub(raw)}`;
   return `Couldn't get an answer from ${label}. Details: ${scrub(raw)}`;
 }

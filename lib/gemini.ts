@@ -47,17 +47,27 @@ export async function geminiStream(opts: {
 }): Promise<GeminiStreamResult> {
   const root = (opts.root ?? GEMINI_ROOT).replace(/\/+$/, "");
   const url = `${root}/models/${encodeURIComponent(opts.model)}:streamGenerateContent?alt=sse`;
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-goog-api-key": opts.apiKey },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: opts.system }] },
-      contents: [{ role: "user", parts: [{ text: opts.user }] }],
-      generationConfig: { maxOutputTokens: opts.maxOutputTokens, temperature: 0.2 },
-    }),
-    signal: opts.signal,
+  const payload = JSON.stringify({
+    systemInstruction: { parts: [{ text: opts.system }] },
+    contents: [{ role: "user", parts: [{ text: opts.user }] }],
+    generationConfig: { maxOutputTokens: opts.maxOutputTokens, temperature: 0.2 },
   });
+
+  // Gemini returns a 500 or 503 often enough on a long prompt that one retry is
+  // worth more than a failed answer. Nothing has streamed yet at this point, so
+  // retrying cannot duplicate visible text.
+  let res: Response | null = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-goog-api-key": opts.apiKey },
+      body: payload,
+      signal: opts.signal,
+    });
+    if (res.status < 500 || attempt === 1 || opts.signal.aborted) break;
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  if (!res) throw new GeminiError("No response from Gemini", 0, "");
 
   if (!res.ok || !res.body) {
     const body = await res.text().catch(() => "");
