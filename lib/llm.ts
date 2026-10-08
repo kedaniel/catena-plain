@@ -65,14 +65,22 @@ const PRESETS: Record<Exclude<ProviderName, "anthropic">, Preset> = {
   custom: { baseURL: "", label: "Custom provider" },
 };
 
-function providerName(): ProviderName {
+function providerName(): { name: ProviderName } | { unknown: string } {
   const raw = (process.env.LLM_PROVIDER || "").trim().toLowerCase();
-  if (raw in PRESETS || raw === "anthropic") return raw as ProviderName;
-  // No provider named: use whichever key is present.
-  if (process.env.ANTHROPIC_API_KEY) return "anthropic";
-  if (process.env.LLM_API_KEY) return "custom";
-  return "anthropic";
+  if (raw === "anthropic" || raw in PRESETS) return { name: raw as ProviderName };
+  // A misspelt provider is said out loud rather than silently becoming "custom".
+  if (raw) return { unknown: raw };
+
+  // No provider named: infer one from whichever key is present.
+  if (process.env.ANTHROPIC_API_KEY) return { name: "anthropic" };
+  const key = (process.env.LLM_API_KEY || "").trim();
+  // Google AI Studio keys begin "AQ." (current) or "AIza" (older).
+  if (/^(AQ\.|AIza)/.test(key)) return { name: "gemini" };
+  if (key) return { name: "custom" };
+  return { name: "anthropic" };
 }
+
+const VALID_PROVIDERS = ["anthropic", ...Object.keys(PRESETS)].join(", ");
 
 export type Config =
   | {
@@ -90,7 +98,14 @@ export type Config =
   | { ok: false; error: string };
 
 export function config(): Config {
-  const provider = providerName();
+  const picked = providerName();
+  if ("unknown" in picked) {
+    return {
+      ok: false,
+      error: `LLM_PROVIDER is set to "${picked.unknown}", which isn't one of: ${VALID_PROVIDERS}.`,
+    };
+  }
+  const provider = picked.name;
 
   if (provider === "anthropic") {
     const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -120,7 +135,12 @@ export function config(): Config {
 
   const baseURL = (process.env.LLM_BASE_URL || preset.baseURL).trim().replace(/\/+$/, "");
   if (!baseURL) {
-    return { ok: false, error: "The app isn't set up yet: LLM_BASE_URL is missing for this provider." };
+    return {
+      ok: false,
+      error:
+        `No provider endpoint. LLM_PROVIDER isn't set, so the app fell back to "custom", which needs LLM_BASE_URL. ` +
+        `For Google Gemini, set LLM_PROVIDER=gemini instead.`,
+    };
   }
   const model = (process.env.LLM_MODEL || preset.defaultModel || "").trim();
   if (!model) {
