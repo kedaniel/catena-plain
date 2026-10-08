@@ -1,5 +1,5 @@
 {
-  "name": "catena-plain",
+  "name": "theobiblia-translator",
   "version": "1.0.0",
   "description": "Turns Church Fathers commentaries from Catena into plain English or Arabic.",
   "scripts": {

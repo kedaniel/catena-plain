@@ -5,9 +5,10 @@ import Markdown from "./Markdown";
 
 type Lang = "en" | "ar" | "both";
 type Level = "simple" | "study";
-type Mode = "link" | "text";
+type Mode = "verse" | "text";
+type FatherOption = { url: string; father: string; work: string; preview: string };
 
-const CODE_KEY = "fmp-access-code";
+const CODE_KEY = "theobiblia-access-code";
 const ERROR_MARK = "[[ERROR]]";
 
 const EXAMPLE = `**St. Augustine, Confessions I.1** *(example)*
@@ -52,22 +53,25 @@ export default function Home() {
   const [codeInput, setCodeInput] = useState("");
   const [codeError, setCodeError] = useState("");
 
-  const [mode, setMode] = useState<Mode>("link");
-  const [link, setLink] = useState("");
+  const [mode, setMode] = useState<Mode>("verse");
+  const [verseInput, setVerseInput] = useState("");
   const [text, setText] = useState("");
-  const [verse, setVerse] = useState("");
-  const [father, setFather] = useState("");
+  const [verseLabel, setVerseLabel] = useState("");
+  const [options, setOptions] = useState<FatherOption[]>([]);
+  const [chosen, setChosen] = useState<FatherOption | null>(null);
+  const [looking, setLooking] = useState(false);
+
   const [lang, setLang] = useState<Lang>("en");
   const [level, setLevel] = useState<Level>("simple");
 
   const [output, setOutput] = useState(EXAMPLE);
   const [isExample, setIsExample] = useState(true);
+  const [fromCache, setFromCache] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<{ msg: string; err?: boolean }>({ msg: "" });
   const ctl = useRef<AbortController | null>(null);
   const outRef = useRef<HTMLDivElement>(null);
 
-  // Restore a remembered code and confirm it is still valid.
   useEffect(() => {
     const saved = readCode();
     if (!saved) {
@@ -98,37 +102,83 @@ export default function Home() {
     }
   }
 
-  async function run() {
-    if (busy) return;
-    const payload = mode === "link" ? { link: link.trim() } : { text: text.trim() };
-    if (!("link" in payload ? payload.link : payload.text)) {
-      setStatus({ msg: mode === "link" ? "Paste a Catena link first." : "Paste the commentary text first.", err: true });
+  function handleAuthLoss(message?: string) {
+    setSignedIn(false);
+    saveCode("");
+    setCodeError(message ?? "Please enter the access code again.");
+  }
+
+  async function lookUp() {
+    const q = verseInput.trim();
+    if (!q || looking) {
+      if (!q) setStatus({ msg: "Type a verse, or paste its link from Catena.", err: true });
       return;
     }
+    setLooking(true);
+    setStatus({ msg: "" });
+    setOptions([]);
+    setChosen(null);
+    setVerseLabel("");
+    try {
+      const r = await fetch("/api/fathers", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-access-code": code },
+        body: JSON.stringify({ verse: q }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        if (r.status === 401) handleAuthLoss(j.error);
+        setStatus({ msg: j.error ?? "Couldn't look that up.", err: true });
+        return;
+      }
+      setVerseLabel(j.verse ?? "");
+      setOptions(j.options ?? []);
+      if (!j.options?.length) setStatus({ msg: "No commentaries found for that verse.", err: true });
+    } catch {
+      setStatus({ msg: "Couldn't reach the app. Check your connection.", err: true });
+    } finally {
+      setLooking(false);
+    }
+  }
+
+  async function run(pick?: FatherOption) {
+    if (busy) return;
+    const target = pick ?? chosen;
+    const payload =
+      mode === "verse"
+        ? { link: target?.url, verse: verseLabel, father: target?.father }
+        : { text: text.trim() };
+    if (mode === "verse" && !target) {
+      setStatus({ msg: "Choose a Father first.", err: true });
+      return;
+    }
+    if (mode === "text" && !text.trim()) {
+      setStatus({ msg: "Paste the commentary text first.", err: true });
+      return;
+    }
+    if (pick) setChosen(pick);
+
     ctl.current = new AbortController();
     setBusy(true);
     setIsExample(false);
+    setFromCache(false);
     setOutput("");
     setStatus({ msg: "" });
-    outRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
     try {
       const r = await fetch("/api/plain", {
         method: "POST",
         headers: { "content-type": "application/json", "x-access-code": code },
-        body: JSON.stringify({ ...payload, verse, father, lang, level }),
+        body: JSON.stringify({ ...payload, lang, level }),
         signal: ctl.current.signal,
       });
       if (!r.ok || !r.body) {
         const j = await r.json().catch(() => ({}));
-        if (r.status === 401) {
-          setSignedIn(false);
-          saveCode("");
-          setCodeError(j.error ?? "Please enter the access code again.");
-        }
+        if (r.status === 401) handleAuthLoss(j.error);
         setStatus({ msg: j.error ?? "Something went wrong. Try again.", err: true });
         return;
       }
+      setFromCache(r.headers.get("x-cache") === "hit");
       const reader = r.body.getReader();
       const dec = new TextDecoder();
       let acc = "";
@@ -168,7 +218,7 @@ export default function Home() {
         <header>
           <div>
             <h1>
-              Fathers Made <span>Plain</span>
+              Theobiblia <span>Translator</span>
             </h1>
             <p className="sub">Church Fathers&apos; commentaries from Catena, in plain English or Arabic.</p>
           </div>
@@ -208,11 +258,11 @@ export default function Home() {
       <header>
         <div>
           <h1>
-            Fathers Made <span>Plain</span>
+            Theobiblia <span>Translator</span>
           </h1>
           <p className="sub">
-            Paste a commentary link from Catena. Get a faithful modern version, the hard words explained, the verses
-            it cites, and the main point.
+            Enter a verse, pick a Church Father, and read his commentary in plain language — with the hard words
+            explained, the verses he cites, and his main point.
           </p>
         </div>
         <button
@@ -228,38 +278,81 @@ export default function Home() {
       </header>
 
       <div className="desk">
-        <section className="pane" aria-label="Commentary">
+        <section className="pane" aria-label="Choose a commentary">
           <div className="tabs" role="tablist">
-            <button role="tab" aria-selected={mode === "link"} onClick={() => setMode("link")}>
-              Catena link
+            <button role="tab" aria-selected={mode === "verse"} onClick={() => setMode("verse")}>
+              By verse
             </button>
             <button role="tab" aria-selected={mode === "text"} onClick={() => setMode("text")}>
               Paste text
             </button>
           </div>
 
-          {mode === "link" ? (
+          {mode === "verse" ? (
             <>
-              <input
-                id="link"
-                type="url"
-                inputMode="url"
-                value={link}
-                onChange={(e) => setLink(e.target.value)}
-                placeholder="https://catenabible.com/com/…"
-                aria-label="Catena commentary link"
-              />
-              <p className="hint">
-                In Catena, open the verse, tap the Father&apos;s commentary, then Share → Copy link.
-              </p>
+              <form
+                className="row"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  lookUp();
+                }}
+              >
+                <input
+                  id="verse"
+                  type="text"
+                  value={verseInput}
+                  onChange={(e) => setVerseInput(e.target.value)}
+                  placeholder="John 3:16 — or paste a Catena link"
+                  aria-label="Verse or Catena link"
+                />
+                <button className="primary" type="submit" disabled={looking} style={{ flex: "0 0 auto" }}>
+                  {looking ? "Looking…" : "Find Fathers"}
+                </button>
+              </form>
+
+              {verseLabel && <p className="hint">{verseLabel}</p>}
+
+              {options.length > 0 && (
+                <div className="fathers">
+                  <p className="label">
+                    {options.length} commentar{options.length === 1 ? "y" : "ies"} — pick one
+                  </p>
+                  <ul className="father-list">
+                    {options.map((o) => (
+                      <li key={o.url}>
+                        <button
+                          className={chosen?.url === o.url ? "father chosen" : "father"}
+                          onClick={() => run(o)}
+                          disabled={busy}
+                        >
+                          <span className="f-name">{o.father}</span>
+                          {o.work && <span className="f-work">{o.work}</span>}
+                          {o.preview && <span className="f-prev">{o.preview}</span>}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="hint">
+                    Catena shows more commentaries behind its &quot;Show more&quot; button than appear here. For one of
+                    those, open it in Catena and paste its link above.
+                  </p>
+                </div>
+              )}
             </>
           ) : (
             <>
-              <div className="row">
-                <input id="verse" type="text" value={verse} onChange={(e) => setVerse(e.target.value)} placeholder="Verse (optional)" aria-label="Verse" />
-                <input id="father" type="text" value={father} onChange={(e) => setFather(e.target.value)} placeholder="Father (optional)" aria-label="Church Father" />
+              <textarea
+                id="text"
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder="Paste the commentary text here…"
+                aria-label="Commentary text"
+              />
+              <div className="actions">
+                <button className="primary" onClick={() => run()} disabled={busy}>
+                  Make it plain
+                </button>
               </div>
-              <textarea id="text" value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste the commentary text here…" aria-label="Commentary text" />
             </>
           )}
 
@@ -296,13 +389,19 @@ export default function Home() {
               ))}
             </div>
           </fieldset>
-
-          <div className="actions">
-            <button className="primary" onClick={run} disabled={busy}>
-              Make it plain
-            </button>
-            {busy && <button onClick={() => ctl.current?.abort()}>Stop</button>}
-          </div>
+          {mode === "verse" && chosen && (
+            <div className="actions">
+              <button onClick={() => run()} disabled={busy}>
+                Redo in this language
+              </button>
+              {busy && <button onClick={() => ctl.current?.abort()}>Stop</button>}
+            </div>
+          )}
+          {mode === "text" && busy && (
+            <div className="actions">
+              <button onClick={() => ctl.current?.abort()}>Stop</button>
+            </div>
+          )}
         </section>
 
         <section className="pane" aria-label="Plain version" aria-live="polite">
@@ -310,6 +409,7 @@ export default function Home() {
             <p className="label">Plain version</p>
             <div className="actions">
               {isExample && <span className="badge">Example</span>}
+              {fromCache && <span className="badge saved">Saved earlier</span>}
               <button onClick={copy} disabled={!output}>
                 Copy
               </button>
@@ -320,7 +420,9 @@ export default function Home() {
               <Markdown source={output} />
             ) : busy ? (
               <p className="placeholder thinking">Reading the Father</p>
-            ) : null}
+            ) : (
+              <p className="placeholder">Pick a Father on the left to see his commentary in plain language.</p>
+            )}
           </div>
           {status.msg && <p className={status.err ? "status err" : "status"}>{status.msg}</p>}
         </section>

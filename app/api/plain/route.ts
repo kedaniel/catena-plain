@@ -1,8 +1,9 @@
+import { createHash } from "crypto";
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { codeKey } from "@/lib/auth";
-import { CatenaError, fetchCatenaText, parseCatenaUrl } from "@/lib/catena";
-import { recordSpend, reserve } from "@/lib/limits";
+import { CatenaError, fetchCatenaText, isCommentaryUrl, parseCatenaUrl } from "@/lib/catena";
+import { cacheGet, cacheSet, recordSpend, reserve } from "@/lib/limits";
 import { buildUserPrompt, Lang, Level, SYSTEM } from "@/lib/prompt";
 import { fail, requireCode } from "../_shared";
 
@@ -14,11 +15,11 @@ const MAX_OUTPUT_TOKENS = Math.min(Number(process.env.MAX_OUTPUT_TOKENS) || 2500
 const MAX_INPUT_CHARS = Math.min(Number(process.env.MAX_INPUT_CHARS) || 15000, 40000);
 
 const clip = (s: unknown, n: number) => (typeof s === "string" ? s.trim().slice(0, n) : "");
+const sha = (s: string) => createHash("sha256").update(s).digest("hex").slice(0, 32);
 
 export async function POST(req: NextRequest) {
   const auth = await requireCode(req);
   if ("res" in auth) return auth.res;
-
   if (!process.env.ANTHROPIC_API_KEY) return fail(503, "The app isn't set up yet: the API key is missing.");
 
   let body: Record<string, unknown>;
@@ -35,17 +36,32 @@ export async function POST(req: NextRequest) {
   const lang: Lang = body.lang === "ar" || body.lang === "both" ? body.lang : "en";
   const level: Level = body.level === "study" ? "study" : "simple";
 
-  if (!link && !pasted) return fail(400, "Paste a Catena link or the commentary text.");
+  if (!link && !pasted) return fail(400, "Choose a commentary, or paste the text.");
   if (pasted.length > MAX_INPUT_CHARS) {
     return fail(413, `That text is too long. Paste up to about ${MAX_INPUT_CHARS.toLocaleString()} characters at a time.`);
   }
 
+  let canonical = "";
   if (!pasted && link) {
     try {
-      parseCatenaUrl(link);
+      const u = parseCatenaUrl(link);
+      if (!isCommentaryUrl(u)) {
+        return fail(422, "That's a verse link. Look up the verse first, then choose a Father.");
+      }
+      canonical = u.toString();
     } catch (e) {
       return fail(422, (e as Error).message);
     }
+  }
+
+  // A commentary already turned into plain language is served from the cache,
+  // so the group only ever pays for it once.
+  const cacheKey = sha([canonical || `text:${sha(pasted)}`, lang, level, MODEL].join("|"));
+  const cached = await cacheGet(cacheKey);
+  if (cached) {
+    return new Response(cached, {
+      headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store", "x-cache": "hit" },
+    });
   }
 
   const gate = await reserve(codeKey(auth.code));
@@ -54,9 +70,9 @@ export async function POST(req: NextRequest) {
   let text = pasted;
   let pageTitle = "";
   let sourceUrl = "";
-  if (!pasted && link) {
+  if (!pasted && canonical) {
     try {
-      const page = await fetchCatenaText(link);
+      const page = await fetchCatenaText(canonical);
       text = page.text.slice(0, MAX_INPUT_CHARS);
       pageTitle = page.title;
       sourceUrl = page.url;
@@ -74,6 +90,8 @@ export async function POST(req: NextRequest) {
     async start(controller) {
       let usageIn = 0;
       let usageOut = 0;
+      let answer = "";
+      let failed = false;
       try {
         const s = client.messages.stream(
           {
@@ -84,22 +102,32 @@ export async function POST(req: NextRequest) {
           },
           { signal: req.signal },
         );
-        s.on("text", (delta) => controller.enqueue(encoder.encode(delta)));
+        s.on("text", (delta) => {
+          answer += delta;
+          controller.enqueue(encoder.encode(delta));
+        });
         const final = await s.finalMessage();
         usageIn = final.usage.input_tokens;
         usageOut = final.usage.output_tokens;
         if (final.stop_reason === "max_tokens") {
+          failed = true; // don't cache a half answer
           controller.enqueue(encoder.encode("\n\n_(Cut short — try a shorter passage.)_"));
         }
-        if (sourceUrl) controller.enqueue(encoder.encode(`\n\nSource: ${sourceUrl}`));
+        if (sourceUrl) {
+          const tail = `\n\nSource: ${sourceUrl}`;
+          answer += tail;
+          controller.enqueue(encoder.encode(tail));
+        }
       } catch (e) {
+        failed = true;
         const msg = e instanceof Anthropic.APIError ? friendlyApiError(e) : "Something went wrong. Try again.";
         controller.enqueue(encoder.encode(`\n\n[[ERROR]] ${msg}`));
       } finally {
         try {
           await recordSpend(usageIn, usageOut);
+          if (!failed && !req.signal.aborted) await cacheSet(cacheKey, answer);
         } catch {
-          /* budget tracking is best effort */
+          /* budget tracking and caching are best effort */
         }
         controller.close();
       }
@@ -107,7 +135,7 @@ export async function POST(req: NextRequest) {
   });
 
   return new Response(stream, {
-    headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
+    headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store", "x-cache": "miss" },
   });
 }
 

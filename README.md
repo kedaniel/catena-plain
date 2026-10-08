@@ -1,6 +1,6 @@
-# Fathers Made Plain
+# Theobiblia Translator
 
-A small web app for a church study group. Paste a commentary link from the [Catena](https://catenabible.com) Bible app (or the text itself), and get back:
+A small web app for a church study group. Enter a Bible verse, pick a Church Father, and get his commentary from the [Catena](https://catenabible.com) Bible app in plain language:
 
 - a faithful plain version in modern English, Arabic, or both
 - the old or theological words explained
@@ -11,10 +11,18 @@ It runs on your own Anthropic API key. Your friends don't need a Claude account;
 
 ## How people use it
 
-1. In Catena, open the verse, tap a Father's commentary, then **Share → Copy link** (the link contains `/com/`).
-2. Open the app, paste the link, choose language and level, tap **Make it plain**.
+1. Type a verse (`John 3:16`) or paste any Catena verse link.
+2. Tap **Find Fathers**. The app lists the Fathers who commented on that verse.
+3. Tap a Father. His commentary comes back in plain language.
 
-Catena's verse pages load commentaries with JavaScript, so a verse link (`/jn/1/1`) won't work. Use the single-commentary share link, or paste the text.
+A **Paste text** tab handles anything the lookup can't reach.
+
+Catena's own verse pages render the commentary list server-side at
+`catenabible.com/verse/nkjv/<book>/<chapter>/<verse>`, which is what the app reads. Commentaries hidden behind Catena's "Show more" button aren't in that HTML; for one of those, open it in Catena and paste its own link.
+
+## Caching
+
+Every finished plain version is stored, keyed by the commentary, language, level and model. If anyone in the group has already read a passage, the next person gets it instantly and it costs nothing. Set how long with `CACHE_DAYS` (default 180).
 
 ## Deploy (about 10 minutes)
 

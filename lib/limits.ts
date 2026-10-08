@@ -109,3 +109,29 @@ export async function monthSpend(): Promise<number | null> {
   if (!redis) return null;
   return Number((await redis.get(`spend:${month()}`)) ?? 0);
 }
+
+/**
+ * Finished answers are kept so the same commentary is only ever paid for once,
+ * however many people in the group read it. Keyed by what would change the
+ * answer: the source, the language, the level and the model.
+ */
+const CACHE_TTL = 60 * 60 * 24 * Number(process.env.CACHE_DAYS || 180);
+
+export async function cacheGet(key: string): Promise<string | null> {
+  if (!redis) return null;
+  try {
+    const v = await redis.get<string>(`out:${key}`);
+    return typeof v === "string" && v.length > 0 ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function cacheSet(key: string, value: string): Promise<void> {
+  if (!redis || value.length < 40) return;
+  try {
+    await redis.set(`out:${key}`, value, { ex: CACHE_TTL });
+  } catch {
+    /* caching is best effort */
+  }
+}

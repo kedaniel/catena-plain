@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Fathers Made Plain",
+  title: "Theobiblia Translator",
   description: "Church Fathers' commentaries from Catena, in plain English or Arabic.",
   robots: { index: false, follow: false },
 };
