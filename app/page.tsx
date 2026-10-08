@@ -11,6 +11,7 @@ type BookOption = { id: string; en: string; ar: string };
 
 const CODE_KEY = "theobiblia-access-code";
 const DEVICE_KEY = "theobiblia-device-id";
+const LLM_KEY = "theobiblia-own-key";
 const ERROR_MARK = "[[ERROR]]";
 
 function readCode(): string {
@@ -38,6 +39,14 @@ function deviceId(): string {
     return id;
   } catch {
     // Private browsing: the request simply falls back to the network address.
+    return "";
+  }
+}
+
+function readOwnKey(): string {
+  try {
+    return localStorage.getItem(LLM_KEY) ?? "";
+  } catch {
     return "";
   }
 }
@@ -194,7 +203,12 @@ export default function Home() {
     try {
       const r = await fetch("/api/plain", {
         method: "POST",
-        headers: { "content-type": "application/json", "x-access-code": code, "x-device-id": deviceId() },
+        headers: {
+          "content-type": "application/json",
+          "x-access-code": code,
+          "x-device-id": deviceId(),
+          ...(ownKey ? { "x-llm-key": ownKey } : {}),
+        },
         body: JSON.stringify({ ...payload, lang }),
         signal: ctl.current.signal,
       });
@@ -225,11 +239,45 @@ export default function Home() {
     }
   }
 
+  const [ownKey, setOwnKey] = useState("");
+  const [ownKeyInput, setOwnKeyInput] = useState("");
+  const [ownKeyMsg, setOwnKeyMsg] = useState("");
+  useEffect(() => setOwnKey(readOwnKey()), []);
+
+  function saveOwnKey() {
+    const k = ownKeyInput.trim();
+    if (!/^(AQ\.|AIza)[A-Za-z0-9_.\-]{10,200}$/.test(k)) {
+      setOwnKeyMsg(t.ownKeyBad);
+      return;
+    }
+    try {
+      localStorage.setItem(LLM_KEY, k);
+    } catch {
+      /* private browsing: it just won't be remembered */
+    }
+    setOwnKey(k);
+    setOwnKeyInput("");
+    setOwnKeyMsg(t.ownKeyOn);
+  }
+
+  function clearOwnKey() {
+    try {
+      localStorage.removeItem(LLM_KEY);
+    } catch {
+      /* nothing to clear */
+    }
+    setOwnKey("");
+    setOwnKeyMsg(t.ownKeyOff);
+  }
+
   const [diag, setDiag] = useState("");
   async function testConnection() {
     setDiag("…");
     try {
-      const r = await fetch("/api/diag", { method: "POST", headers: { "x-access-code": code } });
+      const r = await fetch("/api/diag", {
+        method: "POST",
+        headers: { "x-access-code": code, ...(ownKey ? { "x-llm-key": ownKey } : {}) },
+      });
       const j = await r.json().catch(() => ({}));
       if (j.error) {
         setDiag(j.error);
@@ -520,6 +568,40 @@ export default function Home() {
       <p className="made">
         {t.made} <span className="heart">&#9829;</span>
       </p>
+
+      <details className="diag" open={!ownKey}>
+        <summary>{t.ownKeyTitle}</summary>
+        <p className="hint" style={{ marginTop: 10 }}>{t.ownKeyWhat}</p>
+        {ownKey ? (
+          <div className="actions">
+            <span className="badge saved">{t.ownKeyOn}</span>
+            <button onClick={clearOwnKey}>{t.ownKeyRemove}</button>
+          </div>
+        ) : (
+          <form
+            className="row"
+            onSubmit={(e) => {
+              e.preventDefault();
+              saveOwnKey();
+            }}
+          >
+            <input
+              id="ownkey"
+              type="password"
+              autoComplete="off"
+              value={ownKeyInput}
+              onChange={(e) => setOwnKeyInput(e.target.value)}
+              placeholder={t.ownKeyPlaceholder}
+              dir="ltr"
+            />
+            <button className="primary" type="submit" style={{ flex: "0 0 auto" }}>
+              {t.ownKeySave}
+            </button>
+          </form>
+        )}
+        {ownKeyMsg && <p className="hint">{ownKeyMsg}</p>}
+        <p className="hint">{t.ownKeyNote}</p>
+      </details>
 
       <details className="diag">
         <summary>Setup check</summary>

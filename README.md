@@ -75,6 +75,16 @@ Every finished plain version is stored, keyed by the commentary, language, level
 
 See `.env.example` for all optional settings.
 
+## Readers can bring their own key
+
+A shared key means one small model and one allowance for everyone. Each reader can instead paste their own free Google AI Studio key into the panel at the foot of the page. When they do:
+
+- their requests use **gemini-3.8-flash**, not whatever smaller model the shared key is set to;
+- the usage is billed to **their** free quota, so the app's daily cap and monthly budget do not apply to them;
+- their hourly allowance still applies, to keep one reader from hammering the server.
+
+The key is kept in that browser only and sent with their requests; the server never stores it, and keys are stripped from every error message. Tell readers plainly that anyone able to change the site could read a key they paste into it, so they should use a key they can delete from AI Studio. Set `LLM_MODEL_OWN_KEY` to choose a different model for these readers.
+
 ## Keeping costs under control
 
 If you're on a free tier, skip to the soft caps: there is no bill to cap. Set `INPUT_PRICE_PER_MTOK=0` and `OUTPUT_PRICE_PER_MTOK=0` so the dollar budget doesn't get in the way, and rely on the request limits below.

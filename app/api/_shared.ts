@@ -21,6 +21,17 @@ export function personKey(req: NextRequest): string {
   return id.length >= 8 ? id : `ip:${clientIp(req)}`;
 }
 
+/**
+ * A key the reader supplied for themselves. It is used for that request only
+ * and never stored on the server. Shape is checked so a stray value doesn't
+ * get sent to Google as a credential.
+ */
+export function readerKey(req: NextRequest): string {
+  const k = (req.headers.get("x-llm-key") ?? "").trim();
+  if (!/^(AQ\.|AIza)[A-Za-z0-9_.\-]{10,200}$/.test(k)) return "";
+  return k;
+}
+
 /** Returns the signed-in session, or a ready error response. */
 export async function requireCode(req: NextRequest): Promise<{ session: Session } | { res: NextResponse }> {
   if (!accessCodesConfigured()) {

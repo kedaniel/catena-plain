@@ -45,6 +45,17 @@ export const UI = {
     note:
       "This text is produced by AI and nobody has checked it. It can soften careful theological wording or misread an old phrase. Treat it as a reading aid, never as the Father's own words: keep the original beside it, and check anything that matters against the source or ask a priest.",
     made: "made with love for Theobiblia'2026 cohort",
+    ownKeyTitle: "Use your own Google key (better quality, your own quota)",
+    ownKeyWhat:
+      "The shared key is used by everyone, so it runs on a smaller model and runs out. With your own free key you get the best model and your own allowance. Get one at aistudio.google.com/apikey — no card needed.",
+    ownKeyPlaceholder: "AQ.… or AIza…",
+    ownKeySave: "Save key",
+    ownKeyRemove: "Remove",
+    ownKeyOn: "Using your own key.",
+    ownKeyOff: "Using the shared key.",
+    ownKeyBad: "That doesn't look like a Google AI key. It should start with AQ. or AIza.",
+    ownKeyNote:
+      "Kept on this device only and sent with your requests so Google can bill them to you. Anyone who can change this site could read it — use a key you can delete from AI Studio.",
     needBook: "Choose a book, chapter and verse.",
     needFather: "Choose a Father first.",
     needText: "Paste the commentary text first.",
@@ -96,6 +107,17 @@ export const UI = {
     idle: "اختر أحد الآباء لتقرأ تفسيره بلغة بسيطة.",
     note: "هذا النص من إنتاج الذكاء الاصطناعي ولم يراجعه أحد. قد يُخفّف دقة الصياغة اللاهوتية أو يُخطئ في فهم عبارة قديمة. اعتبره عونًا على القراءة لا كلام الأب نفسه: احتفظ بالنص الأصلي بجانبه، وراجع ما يهمّك مع النص الأصلي أو مع أب الاعتراف.",
     made: "صُنع بمحبة لأجل دفعة ثيوبيبليا 2026",
+    ownKeyTitle: "استخدم مفتاح Google الخاص بك (جودة أفضل، وحصّتك أنت)",
+    ownKeyWhat:
+      "المفتاح المشترك يستخدمه الجميع، لذا يعمل بنموذج أصغر وينفد. بمفتاحك المجاني تحصل على أفضل نموذج وعلى حصّتك الخاصة. احصل عليه من aistudio.google.com/apikey — بدون بطاقة.",
+    ownKeyPlaceholder: "AQ.… أو AIza…",
+    ownKeySave: "حفظ المفتاح",
+    ownKeyRemove: "إزالة",
+    ownKeyOn: "يُستخدم مفتاحك الخاص.",
+    ownKeyOff: "يُستخدم المفتاح المشترك.",
+    ownKeyBad: "لا يبدو هذا مفتاح Google. يجب أن يبدأ بـ AQ. أو AIza.",
+    ownKeyNote:
+      "يُحفظ على هذا الجهاز فقط ويُرسل مع طلباتك لتُحتسب على حسابك في Google. من يستطيع تعديل هذا الموقع يمكنه قراءته — استخدم مفتاحاً يمكنك حذفه من AI Studio.",
     needBook: "اختر السفر والإصحاح والآية.",
     needFather: "اختر أحد الآباء أولًا.",
     needText: "الصق نص التفسير أولًا.",

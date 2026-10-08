@@ -5,7 +5,7 @@ import { CatenaError, fetchCatenaText, isCommentaryUrl, parseCatenaUrl } from "@
 import { cacheGet, cacheSet, recordSpend, reserve } from "@/lib/limits";
 import { config, friendlyError, streamCompletion } from "@/lib/llm";
 import { buildUserPrompt, Lang, Level, PROMPT_VERSION, SYSTEM } from "@/lib/prompt";
-import { fail, personKey, requireCode } from "../_shared";
+import { fail, personKey, readerKey, requireCode } from "../_shared";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -30,7 +30,8 @@ export async function POST(req: NextRequest) {
   const auth = await requireCode(req);
   if ("res" in auth) return auth.res;
 
-  const cfg = config();
+  const own = readerKey(req);
+  const cfg = config({ apiKey: own });
   if (!cfg.ok) return fail(503, cfg.error);
 
   let body: Record<string, unknown>;
@@ -82,7 +83,7 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const gate = await reserve(codeKey(auth.session.code), personKey(req));
+  const gate = await reserve(codeKey(auth.session.code), personKey(req), { ownKey: Boolean(own) });
   if (!gate.ok) return fail(gate.status, gate.message);
 
   let text = pasted;

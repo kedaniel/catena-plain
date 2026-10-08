@@ -94,10 +94,13 @@ export type Config =
       native?: "gemini";
       /** Tried in order; the first that answers is used. */
       models: string[];
+      /** True when the reader supplied the key, so the quota is theirs. */
+      usingOwnKey?: boolean;
     }
   | { ok: false; error: string };
 
-export function config(): Config {
+export function config(override?: { apiKey?: string }): Config {
+  const ownKey = (override?.apiKey ?? "").trim();
   const picked = providerName();
   if ("unknown" in picked) {
     return {
@@ -106,6 +109,25 @@ export function config(): Config {
     };
   }
   const provider = picked.name;
+
+  // A reader's own key is a Google AI Studio key, so it is always used against
+  // Gemini regardless of what the app itself is configured with.
+  if (ownKey) {
+    const preset = PRESETS.gemini;
+    const model = (process.env.LLM_MODEL_OWN_KEY || preset.defaultModel || "gemini-3.8-flash").trim();
+    return {
+      ok: true,
+      provider: "gemini",
+      label: "Google Gemini (your key)",
+      model,
+      baseURL: preset.baseURL,
+      apiKey: ownKey,
+      thinks: true,
+      native: preset.native,
+      models: [model, ...(preset.fallbacks ?? []).filter((m) => m !== model)],
+      usingOwnKey: true,
+    };
+  }
 
   if (provider === "anthropic") {
     const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -308,6 +330,7 @@ const scrub = (s: string) =>
   s
     .replace(/sk-[A-Za-z0-9_-]{8,}/g, "sk-***")
     .replace(/AIza[A-Za-z0-9_-]{10,}/g, "AIza***")
+    .replace(/AQ\.[A-Za-z0-9_.-]{10,}/g, "AQ.***")
     .replace(/key=[A-Za-z0-9_-]+/gi, "key=***")
     .slice(0, 300);
 

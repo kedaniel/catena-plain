@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { geminiModels } from "@/lib/gemini";
 import { hasStore } from "@/lib/limits";
 import { config, friendlyError, streamCompletion } from "@/lib/llm";
-import { requireCode } from "../_shared";
+import { readerKey, requireCode } from "../_shared";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -22,7 +22,8 @@ export async function POST(req: NextRequest) {
   const auth = await requireCode(req);
   if ("res" in auth) return auth.res;
 
-  const cfg = config();
+  const own = readerKey(req);
+  const cfg = config({ apiKey: own });
   if (!cfg.ok) return NextResponse.json({ ok: false, stage: "config", message: cfg.error });
 
   const base: Record<string, unknown> = {

@@ -82,8 +82,15 @@ export async function isLockedOut(ip: string): Promise<boolean> {
 }
 
 /** Check every soft cap before calling the model, and count this request. */
-export async function reserve(codeKey: string, personKey?: string): Promise<LimitResult> {
-  if (redis) {
+export async function reserve(
+  codeKey: string,
+  personKey?: string,
+  opts?: { ownKey?: boolean },
+): Promise<LimitResult> {
+  // A reader using their own key spends their own quota, so the app's shared
+  // budget and daily cap don't apply to them. Their hourly allowance still
+  // does, to keep one person from hammering this server.
+  if (redis && !opts?.ownKey) {
     const spent = Number((await redis.get(`spend:${month()}`)) ?? 0);
     if (spent >= LIMITS.monthlyBudgetUsd) {
       return {
@@ -93,7 +100,7 @@ export async function reserve(codeKey: string, personKey?: string): Promise<Limi
       };
     }
   }
-  const today = await incr(`day:${day()}`, 60 * 60 * 26);
+  const today = opts?.ownKey ? 0 : await incr(`day:${day()}`, 60 * 60 * 26);
   if (today > LIMITS.dailyRequests) {
     return { ok: false, status: 429, message: "The app has reached today's limit. Try again tomorrow." };
   }
