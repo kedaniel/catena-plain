@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
+import { GEMINI_ROOT, GeminiError, geminiStream } from "./gemini";
 
 /**
  * The app can talk to Claude or to any OpenAI-compatible provider, so you can
@@ -15,20 +16,42 @@ import OpenAI from "openai";
  * Everything else in the app is unchanged: the same prompt, the same caching,
  * the same access codes and limits.
  */
-export type ProviderName = "anthropic" | "gemini" | "deepseek" | "groq" | "openrouter" | "custom";
+export type ProviderName =
+  | "anthropic"
+  | "gemini"
+  | "gemini-openai"
+  | "deepseek"
+  | "groq"
+  | "openrouter"
+  | "custom";
 
-type Preset = { baseURL: string; defaultModel?: string; label: string; thinks?: boolean };
+type Preset = {
+  baseURL: string;
+  defaultModel?: string;
+  label: string;
+  thinks?: boolean;
+  /** Set when the provider is called through its own API instead of the OpenAI shape. */
+  native?: "gemini";
+};
 
 const PRESETS: Record<Exclude<ProviderName, "anthropic">, Preset> = {
+  // Gemini uses its own REST API, not the OpenAI compatibility layer: AI Studio
+  // now issues keys beginning "AQ." that must travel in the x-goog-api-key
+  // header, which the compatibility layer's Bearer style rejects.
   gemini: {
-    // No trailing slash: the OpenAI SDK appends "/chat/completions", and a
-    // trailing slash here can produce a double slash, which Google answers
-    // with an empty 400.
-    baseURL: "https://generativelanguage.googleapis.com/v1beta/openai",
+    baseURL: GEMINI_ROOT,
     defaultModel: "gemini-3.8-flash",
     label: "Google Gemini",
     // Gemini 3 models reason before answering, and that reasoning is charged
     // against the output budget, so the budget has to be generous.
+    thinks: true,
+    native: "gemini",
+  },
+  // The compatibility layer, kept for anyone whose older AIza key prefers it.
+  "gemini-openai": {
+    baseURL: "https://generativelanguage.googleapis.com/v1beta/openai",
+    defaultModel: "gemini-3.8-flash",
+    label: "Google Gemini (OpenAI-compatible)",
     thinks: true,
   },
   deepseek: { baseURL: "https://api.deepseek.com/v1", defaultModel: "deepseek-chat", label: "DeepSeek" },
@@ -55,6 +78,7 @@ export type Config =
       baseURL?: string;
       apiKey: string;
       thinks: boolean;
+      native?: "gemini";
     }
   | { ok: false; error: string };
 
@@ -97,7 +121,16 @@ export function config(): Config {
       error: `The app isn't set up yet: LLM_MODEL is missing. Pick a model from ${preset.label} and set it.`,
     };
   }
-  return { ok: true, provider, label: preset.label, model, baseURL, apiKey, thinks: preset.thinks === true };
+  return {
+    ok: true,
+    provider,
+    label: preset.label,
+    model,
+    baseURL,
+    apiKey,
+    thinks: preset.thinks === true,
+    native: preset.native,
+  };
 }
 
 export type StreamOpts = {
@@ -142,6 +175,21 @@ export async function streamCompletion(cfg: Extract<Config, { ok: true }>, o: St
       usageOut: final.usage.output_tokens,
       truncated: final.stop_reason === "max_tokens",
     };
+  }
+
+  if (cfg.native === "gemini") {
+    const r = await geminiStream({
+      root: cfg.baseURL,
+      apiKey: cfg.apiKey,
+      model: cfg.model,
+      system: o.system,
+      user: o.user,
+      maxOutputTokens: o.maxTokens,
+      signal: o.signal,
+      onDelta: o.onDelta,
+    });
+    if (!r.text.trim()) throw new EmptyAnswerError(r.finishReason || "no finish reason");
+    return { text: r.text, usageIn: r.usageIn, usageOut: r.usageOut, truncated: r.truncated };
   }
 
   const client = new OpenAI({ apiKey: cfg.apiKey, baseURL: cfg.baseURL, maxRetries: 1 });
@@ -203,20 +251,34 @@ export function friendlyError(e: unknown, cfg: { label: string; model: string })
   const { label, model } = cfg;
 
   if (e instanceof EmptyAnswerError) {
-    if (e.reason === "length" || e.reason === "max_tokens") {
+    if (e.reason === "SAFETY" || e.reason === "PROHIBITED_CONTENT")
+      return `${label} declined to answer on this passage. Try a different one.`;
+    if (e.reason === "RECITATION")
+      return `${label} stopped because the passage looked like material it won't reproduce. Try a shorter extract.`;
+    if (e.reason === "length" || e.reason === "max_tokens" || e.reason === "MAX_TOKENS") {
       return `${label} ran out of its answer budget before writing anything. Raise MAX_OUTPUT_TOKENS (try 6000) or use a smaller model.`;
     }
     return `${label} returned no text (${e.reason}). Try a shorter passage, or a different model.`;
   }
 
   const status =
-    e instanceof Anthropic.APIError ? e.status : e instanceof OpenAI.APIError ? e.status : undefined;
+    e instanceof GeminiError
+      ? e.status
+      : e instanceof Anthropic.APIError
+        ? e.status
+        : e instanceof OpenAI.APIError
+          ? e.status
+          : undefined;
   const raw = e instanceof Error ? e.message : String(e);
   const msg = raw.toLowerCase();
 
   if (msg.includes("usage limit") || msg.includes("credit balance") || msg.includes("insufficient"))
     return `${label} says the account has no credit or has hit its spending limit.`;
-  if (status === 401 || status === 403) return `The app's ${label} key isn't valid or lacks access.`;
+  if (status === 401 || status === 403)
+    return (
+      `${label} rejected the key (HTTP ${status}). ` +
+      `If it is a Google AI Studio key beginning "AQ.", make sure LLM_PROVIDER is "gemini" and not "gemini-openai". Details: ${scrub(raw)}`
+    );
   if (status === 404 || (status === 400 && (msg.includes("model") || msg.includes("not found"))))
     return `${label} doesn't recognise the model "${model}". Set LLM_MODEL to a model it offers. Details: ${scrub(raw)}`;
   if (status === 429) return `${label} is rate-limiting the app. Wait a minute and try again.`;

@@ -16,7 +16,8 @@ The app talks to Claude **or** to any OpenAI-compatible provider, so it can run 
 | `LLM_PROVIDER` | Where the key comes from | Notes |
 |---|---|---|
 | *(unset)* + `ANTHROPIC_API_KEY` | platform.claude.com | Best quality. Needs paid credits. |
-| `gemini` | aistudio.google.com | Google AI Studio has a free tier. Default model `gemini-3.8-flash`. |
+| `gemini` | aistudio.google.com/apikey | Free tier. Calls Google's own API, so it accepts both current `AQ.` keys and older `AIza` ones. Default model `gemini-3.8-flash`. |
+| `gemini-openai` | aistudio.google.com/apikey | Gemini through its OpenAI compatibility layer. Only for an older `AIza` key; `AQ.` keys are rejected there. |
 | `deepseek` | platform.deepseek.com | Very cheap, but still needs a top-up. Default model `deepseek-chat`. |
 | `groq` | console.groq.com | Free tier. Set `LLM_MODEL` to a model it currently serves. |
 | `openrouter` | openrouter.ai | Some models are free. Set `LLM_MODEL`. |
@@ -28,7 +29,7 @@ Model names and free-tier limits change, so check the provider's own console for
 
 **Reasoning models.** Gemini 3 models think before they write, and that thinking is charged against the answer budget. Too small a budget and the model spends it all thinking and returns nothing, so the app defaults to 8000 output tokens for Gemini instead of 2500.
 
-**Base URLs.** Any trailing slash on `LLM_BASE_URL` is stripped, because the OpenAI SDK appends `/chat/completions` and a double slash makes Google return an empty HTTP 400.
+**Google API keys.** AI Studio now issues "auth keys" beginning `AQ.` instead of the older `AIza` keys. These must be sent in an `x-goog-api-key` header, so Gemini's OpenAI compatibility layer — which sends `Authorization: Bearer` — rejects them with HTTP 401 `ACCESS_TOKEN_TYPE_UNSUPPORTED`. The `gemini` provider calls Google's native API and works with either key format.
 
 Quality differs by provider. The prompt is the same for all of them: keep every point in the Father's order, add no interpretation, flag unclear phrases. A smaller model follows that less exactly, so the "check against the original" note on the page matters more, not less.
 

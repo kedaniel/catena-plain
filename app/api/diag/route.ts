@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { geminiModels } from "@/lib/gemini";
 import { hasStore } from "@/lib/limits";
 import { config, friendlyError, streamCompletion } from "@/lib/llm";
 import { requireCode } from "../_shared";
@@ -39,53 +40,30 @@ export async function POST(req: NextRequest) {
       // Derived from the configured base URL (".../v1beta/openai" -> ".../v1beta/models")
       // rather than hardcoded, so a custom endpoint is checked too.
       const root = (cfg.baseURL ?? "").replace(/\/openai$/, "");
-      // Google accepts an API key as a query parameter or as a header. Try both,
-      // because a 401 on one and not the other means something quite different.
-      let res = await fetch(`${root}/models?key=${encodeURIComponent(cfg.apiKey)}&pageSize=200`, {
-        signal: AbortSignal.timeout(25_000),
-      });
-      let how = "key query parameter";
-      if (res.status === 401 || res.status === 403) {
-        const alt = await fetch(`${root}/models?pageSize=200`, {
-          headers: { "x-goog-api-key": cfg.apiKey },
-          signal: AbortSignal.timeout(25_000),
-        });
-        if (alt.ok) {
-          res = alt;
-          how = "x-goog-api-key header";
-        }
-      }
-      base.auth = how;
-      const text = await res.text();
-      if (!res.ok) {
+      base.auth = "x-goog-api-key header";
+      const listed = await geminiModels(cfg.apiKey, root);
+      if (!listed.ok) {
         return NextResponse.json({
           ok: false,
           stage: "key",
           ...base,
-          httpStatus: res.status,
+          httpStatus: listed.status,
           message:
-            `Google would not accept this key (HTTP ${res.status}). It must be an API key from Google AI Studio — ` +
-            `those begin "AIza". An OAuth client ID or secret, or a key whose project lacks the Generative Language API, fails like this.`,
-          body: scrub(text || "(no error text)").slice(0, 400),
+            `Google would not accept this key (HTTP ${listed.status}). Create a key at aistudio.google.com/apikey ` +
+            `and set LLM_PROVIDER to "gemini".`,
+          body: scrub(listed.body || "(no error text)"),
         });
       }
-      const parsed = JSON.parse(text) as {
-        models?: { name?: string; supportedGenerationMethods?: string[] }[];
-      };
-      const usable = (parsed.models ?? [])
-        .filter((m) => (m.supportedGenerationMethods ?? []).includes("generateContent"))
-        .map((m) => (m.name ?? "").replace(/^models\//, ""))
-        .filter(Boolean);
       base.keyWorks = true;
-      base.modelAvailable = usable.includes(cfg.model);
+      base.modelAvailable = listed.models.includes(cfg.model);
       if (!base.modelAvailable) {
-        const flash = usable.filter((m) => m.includes("flash")).slice(0, 12);
+        const flash = listed.models.filter((m) => m.includes("flash")).slice(0, 12);
         return NextResponse.json({
           ok: false,
           stage: "model",
           ...base,
           message: `Your key works, but it can't use "${cfg.model}". Set LLM_MODEL to one of the names below.`,
-          body: (flash.length ? flash : usable.slice(0, 12)).join("\n"),
+          body: (flash.length ? flash : listed.models.slice(0, 12)).join("\n"),
         });
       }
     } catch (e) {
@@ -100,7 +78,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Step 1 — raw probe, OpenAI-compatible providers only.
-  if (cfg.baseURL) {
+  if (cfg.baseURL && !cfg.native) {
     const url = `${cfg.baseURL}/chat/completions`;
     base.path = new URL(url).pathname;
     try {
@@ -166,20 +144,22 @@ export async function POST(req: NextRequest) {
 }
 
 /**
- * Enough to tell an AI Studio key from something else, without revealing it:
- * the first four characters and the length. A Gemini key looks like
- * "AIza… (39 chars)"; an OAuth client secret or a stray value will not.
+ * Enough to tell one credential type from another without revealing the key:
+ * the first few characters and the length. AI Studio now issues "AQ." auth
+ * keys; "AIza" keys are the older format. Both work through the native API.
  */
 function describeKey(key: string): string {
-  const kind = key.startsWith("AIza")
-    ? "looks like an AI Studio key"
-    : /^GOCSPX-/.test(key)
-      ? "looks like an OAuth client SECRET — wrong credential type"
-      : /\.apps\.googleusercontent\.com$/.test(key)
-        ? "looks like an OAuth client ID — wrong credential type"
-        : key.startsWith("ya29.")
-          ? "looks like a short-lived OAuth token — wrong credential type"
-          : "does not look like an AI Studio key";
+  const kind = key.startsWith("AQ.")
+    ? "AI Studio auth key (current format)"
+    : key.startsWith("AIza")
+      ? "AI Studio key (older format)"
+      : /^GOCSPX-/.test(key)
+          ? "OAuth client SECRET — wrong credential type"
+        : /\.apps\.googleusercontent\.com$/.test(key)
+          ? "OAuth client ID — wrong credential type"
+          : key.startsWith("ya29.")
+            ? "short-lived OAuth token — wrong credential type"
+            : "not a recognised AI Studio key format";
   return `${key.slice(0, 4)}… (${key.length} chars, ${kind})`;
 }
 
