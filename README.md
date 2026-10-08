@@ -52,7 +52,9 @@ Both accept comma-separated lists. The Arabic version's language is enforced on 
 A **Paste text** tab handles text copied straight out of Catena.
 
 Catena's own verse pages render the commentary list server-side at
-`catenabible.com/verse/nkjv/<book>/<chapter>/<verse>`, which is what the app reads. Some verses have dozens of commentaries and Catena shows only part of the list at once, so the app follows further pages until one adds nothing new (up to 12 pages). It prefers an explicit "next" link and otherwise tries `?page=N`; if Catena ignores that parameter the second page repeats the first and the loop stops, costing one wasted request and never duplicating an entry. If a commentary is still missing, open it in Catena and paste its own link.
+`catenabible.com/verse/nkjv/<book>/<chapter>/<verse>`, which is what the app reads.
+
+The app follows a further page only when the verse page offers an explicit "next" link on its own path. It does **not** guess `?page=N`: Catena serves those pages without applying the verse filter, so guessing returned unrelated commentaries — a verse with 13 of them came back with 150, and the extra links 404 when opened. For the same reason a "related verse" link is never followed, however its text reads. If a commentary is missing from the list, open it in Catena and paste its own link.
 
 ## Caching
 

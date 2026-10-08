@@ -8,6 +8,13 @@ const UA = "TheobibliaTranslator/1.0 (church study group reader)";
 
 export class CatenaError extends Error {}
 
+/** A page Catena does not have. Callers phrase this for their own context. */
+export class NotFoundError extends CatenaError {
+  constructor() {
+    super("Catena has no page at that address.");
+  }
+}
+
 export type FatherOption = {
   url: string;
   father: string;
@@ -53,10 +60,7 @@ async function get(u: URL): Promise<{ $: cheerio.CheerioAPI; url: URL }> {
     break;
   }
   if (!res) throw new CatenaError("Couldn't reach Catena.");
-  if (res.status === 404)
-    throw new CatenaError(
-      "Catena doesn't have a page for that verse. Check the chapter and verse numbers, or paste the verse's link from Catena.",
-    );
+  if (res.status === 404) throw new NotFoundError();
   if (!res.ok) throw new CatenaError(`Catena didn't return the page (status ${res.status}).`);
   const buf = await res.arrayBuffer();
   if (buf.byteLength > MAX_BYTES) throw new CatenaError("That page is too large to read.");
@@ -120,7 +124,8 @@ function harvest($: cheerio.CheerioAPI, url: URL, seen: Set<string>): FatherOpti
     } catch {
       return;
     }
-    if (!/^\/(com|commentary)\//.test(abs.pathname)) return;
+    // /com/<id> or /commentary/<hash>/<n> — anything else is not a commentary.
+    if (!/^\/com\/[^/]+\/?$/.test(abs.pathname) && !/^\/commentary\/[^/]+\/\d+\/?$/.test(abs.pathname)) return;
     const key = abs.toString();
     if (seen.has(key)) return;
 
@@ -148,6 +153,7 @@ function harvest($: cheerio.CheerioAPI, url: URL, seen: Set<string>): FatherOpti
 
 /** A "next page" link, if the page offers one. */
 function nextPageUrl($: cheerio.CheerioAPI, url: URL): URL | null {
+  const samePage = (u: URL) => u.pathname === url.pathname && u.hostname === url.hostname;
   const candidates = [
     $('link[rel="next"]').attr("href"),
     $('a[rel="next"]').attr("href"),
@@ -165,7 +171,9 @@ function nextPageUrl($: cheerio.CheerioAPI, url: URL): URL | null {
   for (const href of candidates) {
     try {
       const abs = new URL(href, url);
-      if (abs.hostname.toLowerCase().endsWith("catenabible.com") && abs.toString() !== url.toString()) return abs;
+      // Same verse, different page only: anything else is a related-verse link,
+      // and following it would list another verse's commentaries.
+      if (samePage(abs) && abs.search !== url.search) return abs;
     } catch {
       /* skip an unparseable href */
     }
@@ -173,7 +181,7 @@ function nextPageUrl($: cheerio.CheerioAPI, url: URL): URL | null {
   return null;
 }
 
-const MAX_PAGES = 12;
+const MAX_PAGES = 6;
 
 /**
  * The Fathers who commented on a verse, with a link to each commentary.
@@ -189,6 +197,9 @@ export async function fetchFathers(
   const lookup = verseLookup(raw);
   let candidates = lookup.urls;
   let last: CatenaError | null = null;
+  // A page that loaded but listed nothing explains more than a later 404 on a
+  // spelling variant, so it wins.
+  let loadedButEmpty = false;
 
   // A code already known to work for this book is tried first, so a wrong guess
   // costs one extra request once rather than on every lookup.
@@ -205,7 +216,14 @@ export async function fetchFathers(
     try {
       page = await get(candidate);
     } catch (e) {
-      last = e instanceof CatenaError ? e : new CatenaError("Couldn't reach Catena.");
+      last =
+        e instanceof NotFoundError
+          ? new CatenaError(
+              "Catena doesn't have a page for that verse. Check the chapter and verse numbers, or paste the verse's link from Catena.",
+            )
+          : e instanceof CatenaError
+            ? e
+            : new CatenaError("Couldn't reach Catena.");
       continue;
     }
     const { $, url } = page;
@@ -218,28 +236,25 @@ export async function fetchFathers(
     const seen = new Set<string>();
     const options = harvest($, url, seen);
     if (!options.length) {
-      last = new CatenaError(
-        "Catena didn't list any commentaries for that verse. Try another verse, or open one commentary in Catena and paste its link.",
-      );
+      loadedButEmpty = true;
       continue;
     }
 
     let pages = 1;
     let complete = true;
     let current = { $, url };
+    // Only an explicit next-page link on the verse's own path is followed.
+    // Guessing "?page=2" was wrong: Catena ignores the verse filter on those
+    // pages and returns unrelated commentaries, so a verse with 13 of them
+    // came back with 150, and those extra links 404 when opened.
     while (pages < MAX_PAGES) {
-      const next =
-        nextPageUrl(current.$, current.url) ??
-        (() => {
-          const u = new URL(current.url.toString());
-          u.searchParams.set("page", String(pages + 1));
-          return u;
-        })();
+      const next = nextPageUrl(current.$, current.url);
+      if (!next) break;
       let fetched: { $: cheerio.CheerioAPI; url: URL };
       try {
         fetched = await get(next);
       } catch {
-        break; // a 404 simply means there is no further page
+        break;
       }
       const more = harvest(fetched.$, fetched.url, seen);
       pages += 1;
@@ -255,6 +270,11 @@ export async function fetchFathers(
     }
     return { verse, url: url.toString(), options, pages, complete };
   }
+  if (loadedButEmpty) {
+    throw new CatenaError(
+      "Catena has no commentaries on that verse yet. Try a nearby verse — the Fathers often comment on a passage at its opening verse.",
+    );
+  }
   throw (
     last ??
     new CatenaError(
@@ -269,7 +289,32 @@ export async function fetchFathers(
  * That is sturdier than depending on class names that may change.
  */
 export async function fetchCatenaText(raw: string): Promise<{ title: string; text: string; url: string }> {
-  const { $, url } = await get(parseCatenaUrl(raw));
+  const target = parseCatenaUrl(raw);
+  let page: { $: cheerio.CheerioAPI; url: URL };
+  try {
+    page = await get(target);
+  } catch (e) {
+    // "?p=" carries the verse context and can go stale; the page itself may
+    // still be there without it.
+    if (e instanceof NotFoundError && target.search) {
+      const bare = new URL(target.toString());
+      bare.search = "";
+      try {
+        page = await get(bare);
+      } catch {
+        throw new CatenaError(
+          "Catena no longer has that commentary at this address. Pick another Father, or open it in Catena and paste its link.",
+        );
+      }
+    } else if (e instanceof NotFoundError) {
+      throw new CatenaError(
+        "Catena no longer has that commentary at this address. Pick another Father, or open it in Catena and paste its link.",
+      );
+    } else {
+      throw e;
+    }
+  }
+  const { $, url } = page;
 
   const title = clean($('meta[property="og:title"]').attr("content") ?? "") || clean($("title").first().text());
   const metaDesc = clean($('meta[property="og:description"], meta[name="description"]').attr("content") ?? "");
