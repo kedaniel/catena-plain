@@ -24,8 +24,7 @@ export const UI = {
     orLink: "Or paste a Catena link",
     linkPlaceholder: "https://catenabible.com/…",
     pickOne: (n: number) => `${n} commentar${n === 1 ? "y" : "ies"} — pick one`,
-    moreHint:
-      'Catena shows more commentaries behind its "Show more" button than appear here. For one of those, open it in Catena and paste its link above.',
+    moreHint: "If one is missing, open it in Catena and paste its link above.",
     language: "Language",
     langEn: "English",
     langAr: "العربية",
@@ -75,8 +74,7 @@ export const UI = {
     orLink: "أو الصق رابطًا من Catena",
     linkPlaceholder: "https://catenabible.com/…",
     pickOne: (n: number) => `${n} تفسير — اختر واحدًا`,
-    moreHint:
-      'يعرض Catena تفاسير أكثر من الظاهرة هنا خلف زر "Show more". للحصول على أحدها، افتحه في Catena والصق رابطه أعلاه.',
+    moreHint: "إذا كان أحد التفاسير غير ظاهر، افتحه في Catena والصق رابطه أعلاه.",
     language: "اللغة",
     langEn: "English",
     langAr: "العربية",
@@ -108,38 +106,36 @@ export const UI = {
 
 export const EXAMPLE_EN = `**St. Augustine, Confessions I.1** *(example)*
 
-## Plain version
-Lord, you are great and you deserve all our praise. Your power is great, and your wisdom has no limit. Human beings want to praise you, even though we are only a tiny part of everything you made. We carry our mortality around with us, and it reminds us of our sin and that you oppose the proud. Even so, we still want to praise you. You stir us up to find joy in praising you, because you made us for yourself, and our hearts cannot rest until they rest in you.
+## Full text in plain language
+Lord, you are great, and you deserve all our praise. Your power is great. Your wisdom has no limit or number.
+
+And a human being wants to praise you — a human being, who is only a tiny part of everything you made. A human being who carries his own mortality about with him, who carries the evidence of his sin with him, and who carries the evidence that you stand against the proud. And still, even so, this human being wants to praise you — he who is only a tiny part of what you made.
+
+You are the one who stirs us up, so that praising you becomes a delight to us. You did this because you made us for yourself. And so our heart has no rest in it, and will not rest, until it comes to rest in you.
 
 ## Words explained
 - **Particle** — a very small part.
 - **Mortality** — the fact that we will die.
-- **Resistest the proud** — "you stand against proud people".
-- **Repose** — rest, be at peace.
+- **Resistest the proud** — "you stand against proud people" (quoting the Bible).
+- **Repose** — to rest, to be at peace.
 
-## Bible verses mentioned
-- Psalm 145:3 — "Great is the Lord, and greatly to be praised"
-- Psalm 147:5 — his understanding is without number
-- James 4:6 / 1 Peter 5:5 — God resists the proud
-
-## Main point
-We are small, mortal and sinful, yet God made us for himself. That is why we long to praise him, and why nothing else can give our hearts real rest.`;
+## Summary
+Augustine opens his Confessions by praising God rather than by explaining himself. He sets God's greatness, power and limitless wisdom against what a human being is: a small part of creation, carrying death and sin about with him. The main point is that this small, mortal creature still longs to praise God, and that the longing is God's own doing: he made us for himself, so our hearts stay restless until they rest in him.`;
 
 export const EXAMPLE_AR = `**القديس أغسطينوس، الاعترافات ١:١** *(مثال)*
 
-## النص المبسّط
-أيها الرب، أنت عظيم وتستحق كل التسبيح. قوتك عظيمة، وحكمتك لا حدّ لها. يريد الإنسان أن يسبّحك، مع أنه جزء صغير جدًا من كل ما خلقت. نحمل موتنا معنا، وهو يذكّرنا بخطيئتنا وبأنك تقاوم المتكبرين. ومع ذلك نريد أن نسبّحك. أنت توقظ فينا الفرح بتسبيحك، لأنك خلقتنا لنفسك، وقلبنا لا يستقر حتى يستقر فيك.
+## النص الكامل بلغة بسيطة
+أيها الرب، أنت عظيم، وتستحق كل التسبيح. قوتك عظيمة، وحكمتك لا حدّ لها ولا عدد.
+
+والإنسان يريد أن يسبّحك — الإنسان الذي هو جزء صغير جدًا من كل ما خلقت. الإنسان الذي يحمل موته معه، ويحمل معه الدليل على خطيئته، ويحمل الدليل على أنك تقاوم المتكبرين. ومع ذلك، هذا الإنسان يريد أن يسبّحك، وهو ليس إلا جزءًا ضئيلًا من خلقك.
+
+أنت الذي توقظنا، حتى يصير تسبيحك فرحًا لنا. وفعلت ذلك لأنك خلقتنا لنفسك. ولذلك لا يجد قلبنا راحة، ولن يجدها، حتى يستقر فيك.
 
 ## شرح الكلمات
 - **جزء ضئيل** — قسم صغير جدًا.
-- **الموت (الفناء)** — حقيقة أننا سنموت.
+- **الفناء (الموت)** — حقيقة أننا سنموت.
 - **تقاوم المتكبرين** — "تقف ضد المتكبرين" (اقتباس من الكتاب المقدس).
 - **يستقر** — يرتاح ويطمئن.
 
-## الآيات المذكورة
-- مزمور ١٤٥:٣ — "عظيم هو الرب وحميد جدًا"
-- مزمور ١٤٧:٥ — فهمه لا يُحصى
-- يعقوب ٤:٦ / ١ بطرس ٥:٥ — الله يقاوم المتكبرين
-
-## الفكرة الرئيسية
-نحن صغار وفانون وخطأة، ومع ذلك خلقنا الله لنفسه. لذلك نشتاق إلى تسبيحه، ولذلك لا يستطيع شيء آخر أن يمنح قلوبنا راحة حقيقية.`;
+## الملخص
+يبدأ أغسطينوس اعترافاته بالتسبيح لا بالحديث عن نفسه. يضع عظمة الله وقوته وحكمته غير المحدودة في مقابل حقيقة الإنسان: جزء صغير من الخلق، يحمل موته وخطيئته معه. والفكرة الرئيسية أن هذا المخلوق الصغير الفاني ما زال يشتاق إلى تسبيح الله، وأن هذا الاشتياق هو من عمل الله نفسه: فقد خلقنا لنفسه، ولذلك يبقى قلبنا بلا راحة حتى يستقر فيه.`;

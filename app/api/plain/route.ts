@@ -4,7 +4,7 @@ import { codeKey } from "@/lib/auth";
 import { CatenaError, fetchCatenaText, isCommentaryUrl, parseCatenaUrl } from "@/lib/catena";
 import { cacheGet, cacheSet, recordSpend, reserve } from "@/lib/limits";
 import { config, friendlyError, streamCompletion } from "@/lib/llm";
-import { buildUserPrompt, Lang, Level, SYSTEM } from "@/lib/prompt";
+import { buildUserPrompt, Lang, Level, PROMPT_VERSION, SYSTEM } from "@/lib/prompt";
 import { fail, requireCode } from "../_shared";
 
 export const runtime = "nodejs";
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
 
   // A commentary already turned into plain language is served from the cache,
   // so the group only ever pays for it once.
-  const cacheKey = sha([canonical || `text:${sha(pasted)}`, lang, level, cfg.model].join("|"));
+  const cacheKey = sha([canonical || `text:${sha(pasted)}`, lang, level, cfg.model, PROMPT_VERSION].join("|"));
   const cached = await cacheGet(cacheKey);
   if (cached) {
     return new Response(cached, {

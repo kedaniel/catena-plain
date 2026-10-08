@@ -93,8 +93,84 @@ export function verseUrlCandidates(raw: string): URL[] {
 
 const clean = (s: string) => s.replace(/\s+/g, " ").trim();
 
-/** The Fathers who commented on a verse, with a link to each commentary. */
-export async function fetchFathers(raw: string): Promise<{ verse: string; url: string; options: FatherOption[] }> {
+/** Commentary links on one already-fetched verse page. */
+function harvest($: cheerio.CheerioAPI, url: URL, seen: Set<string>): FatherOption[] {
+  const found: FatherOption[] = [];
+  $("a[href]").each((_, el) => {
+    const href = $(el).attr("href");
+    if (!href) return;
+    let abs: URL;
+    try {
+      abs = new URL(href, url);
+    } catch {
+      return;
+    }
+    if (!/^\/(com|commentary)\//.test(abs.pathname)) return;
+    const key = abs.toString();
+    if (seen.has(key)) return;
+
+    const whole = clean($(el).text());
+    if (whole.length < 3) return;
+    seen.add(key);
+
+    // Catena puts the author, the work title and an excerpt in separate
+    // elements inside the link. Take the shortest leading ones as author
+    // and work, and fall back to the link's own text.
+    const bits = $(el)
+      .find("*")
+      .toArray()
+      .map((e) => clean($(e).text()))
+      .filter((t) => t.length > 1);
+    const unique = bits.filter((t, i) => bits.indexOf(t) === i && t !== whole);
+    const father = unique.find((t) => t.length <= 46) ?? whole.slice(0, 46);
+    const work = unique.find((t) => t !== father && t.length <= 110) ?? "";
+    const preview = (unique[unique.length - 1] ?? whole).slice(0, 220);
+
+    found.push({ url: key, father, work, preview: preview === father ? "" : preview });
+  });
+  return found;
+}
+
+/** A "next page" link, if the page offers one. */
+function nextPageUrl($: cheerio.CheerioAPI, url: URL): URL | null {
+  const candidates = [
+    $('link[rel="next"]').attr("href"),
+    $('a[rel="next"]').attr("href"),
+    ...$("a[href]")
+      .toArray()
+      .map((el) => {
+        const text = clean($(el).text()).toLowerCase();
+        const href = $(el).attr("href") ?? "";
+        const looksLikeMore =
+          /\bnext\b|\bmore\b|»|›/.test(text) || (/[?&]page=\d+/.test(href) && !/page=1\b/.test(href));
+        return looksLikeMore ? href : undefined;
+      }),
+  ].filter((h): h is string => typeof h === "string" && h.length > 0);
+
+  for (const href of candidates) {
+    try {
+      const abs = new URL(href, url);
+      if (abs.hostname.toLowerCase().endsWith("catenabible.com") && abs.toString() !== url.toString()) return abs;
+    } catch {
+      /* skip an unparseable href */
+    }
+  }
+  return null;
+}
+
+const MAX_PAGES = 12;
+
+/**
+ * The Fathers who commented on a verse, with a link to each commentary.
+ *
+ * Catena shows only part of a long list at once — some verses have dozens of
+ * commentaries — so further pages are followed until one adds nothing new.
+ * An explicit "next" link is preferred; otherwise ?page=N is tried, and if
+ * Catena ignores it the second page repeats the first and the loop stops.
+ */
+export async function fetchFathers(
+  raw: string,
+): Promise<{ verse: string; url: string; options: FatherOption[]; pages: number; complete: boolean }> {
   const candidates = verseUrlCandidates(raw);
   let last: CatenaError | null = null;
 
@@ -114,44 +190,40 @@ export async function fetchFathers(raw: string): Promise<{ verse: string; url: s
       clean($("title").first().text());
 
     const seen = new Set<string>();
-    const options: FatherOption[] = [];
-    $("a[href]").each((_, el) => {
-      const href = $(el).attr("href");
-      if (!href) return;
-      let abs: URL;
+    const options = harvest($, url, seen);
+    if (!options.length) {
+      last = new CatenaError(
+        "Catena didn't list any commentaries for that verse. Try another verse, or open one commentary in Catena and paste its link.",
+      );
+      continue;
+    }
+
+    let pages = 1;
+    let complete = true;
+    let current = { $, url };
+    while (pages < MAX_PAGES) {
+      const next =
+        nextPageUrl(current.$, current.url) ??
+        (() => {
+          const u = new URL(current.url.toString());
+          u.searchParams.set("page", String(pages + 1));
+          return u;
+        })();
+      let fetched: { $: cheerio.CheerioAPI; url: URL };
       try {
-        abs = new URL(href, url);
+        fetched = await get(next);
       } catch {
-        return;
+        break; // a 404 simply means there is no further page
       }
-      if (!/^\/(com|commentary)\//.test(abs.pathname)) return;
-      const key = abs.toString();
-      if (seen.has(key)) return;
+      const more = harvest(fetched.$, fetched.url, seen);
+      pages += 1;
+      if (!more.length) break;
+      options.push(...more);
+      current = fetched;
+      if (pages >= MAX_PAGES) complete = false;
+    }
 
-      const whole = clean($(el).text());
-      if (whole.length < 3) return;
-      seen.add(key);
-
-      // Catena puts the author, the work title and an excerpt in separate
-      // elements inside the link. Take the shortest leading ones as author
-      // and work, and fall back to the link's own text.
-      const bits = $(el)
-        .find("*")
-        .toArray()
-        .map((e) => clean($(e).text()))
-        .filter((t) => t.length > 1);
-      const unique = bits.filter((t, i) => bits.indexOf(t) === i && t !== whole);
-      const father = unique.find((t) => t.length <= 46) ?? whole.slice(0, 46);
-      const work = unique.find((t) => t !== father && t.length <= 110) ?? "";
-      const preview = (unique[unique.length - 1] ?? whole).slice(0, 220);
-
-      options.push({ url: key, father, work, preview: preview === father ? "" : preview });
-    });
-
-    if (options.length) return { verse, url: url.toString(), options };
-    last = new CatenaError(
-      "Catena didn't list any commentaries for that verse on the page. Try another verse, or open one commentary in Catena and paste its link.",
-    );
+    return { verse, url: url.toString(), options, pages, complete };
   }
   throw last ?? new CatenaError("Couldn't read that verse page.");
 }
