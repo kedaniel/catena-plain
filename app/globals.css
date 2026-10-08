@@ -115,3 +115,9 @@ button:disabled { opacity: 0.55; cursor: default; }
   .thinking::after { content: ""; animation: dots 1.2s steps(4) infinite; }
 }
 @keyframes dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
+
+/* Setup check, collapsed by default */
+.diag { margin-top: 18px; font-size: 13.5px; color: var(--muted); }
+.diag summary { cursor: pointer; }
+.diag .actions { margin-top: 10px; }
+.diag-out { margin: 10px 0 0; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 7px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; color: var(--ink); direction: ltr; text-align: left; }

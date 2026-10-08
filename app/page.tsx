@@ -206,6 +206,26 @@ export default function Home() {
     }
   }
 
+  const [diag, setDiag] = useState("");
+  async function testConnection() {
+    setDiag("…");
+    try {
+      const r = await fetch("/api/diag", { method: "POST", headers: { "x-access-code": code } });
+      const j = await r.json().catch(() => ({}));
+      if (j.error) {
+        setDiag(j.error);
+        return;
+      }
+      const head = `${j.ok ? "✓" : "✗"} ${j.message ?? ""}`;
+      const detail = [j.provider && `provider: ${j.provider}`, j.model && `model: ${j.model}`, j.endpoint, j.cache && `cache: ${j.cache}`]
+        .filter(Boolean)
+        .join(" · ");
+      setDiag(`${head}\n${detail}`);
+    } catch {
+      setDiag(t.offline);
+    }
+  }
+
   async function copy() {
     const txt = outRef.current?.innerText.trim();
     if (!txt) return;
@@ -464,6 +484,14 @@ export default function Home() {
       </div>
 
       <p className="note">{t.note}</p>
+
+      <details className="diag">
+        <summary>Setup check</summary>
+        <div className="actions">
+          <button onClick={testConnection}>Test connection</button>
+        </div>
+        {diag && <pre className="diag-out">{diag}</pre>}
+      </details>
     </main>
   );
 }

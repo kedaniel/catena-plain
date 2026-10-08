@@ -10,8 +10,18 @@ import { fail, requireCode } from "../_shared";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const MAX_OUTPUT_TOKENS = Math.min(Number(process.env.MAX_OUTPUT_TOKENS) || 2500, 6000);
-const MAX_INPUT_CHARS = Math.min(Number(process.env.MAX_INPUT_CHARS) || 15000, 40000);
+const MAX_INPUT_CHARS_CAP = 40000;
+const MAX_INPUT_CHARS = Math.min(Number(process.env.MAX_INPUT_CHARS) || 15000, MAX_INPUT_CHARS_CAP);
+
+/**
+ * A model that reasons before answering spends part of this budget thinking, so
+ * it needs considerably more room than one that writes straight away.
+ */
+function maxOutputTokens(thinks: boolean): number {
+  const set = Number(process.env.MAX_OUTPUT_TOKENS);
+  if (Number.isFinite(set) && set > 0) return Math.min(set, 16000);
+  return thinks ? 8000 : 2500;
+}
 
 const clip = (s: unknown, n: number) => (typeof s === "string" ? s.trim().slice(0, n) : "");
 const sha = (s: string) => createHash("sha256").update(s).digest("hex").slice(0, 32);
@@ -98,7 +108,7 @@ export async function POST(req: NextRequest) {
         const result = await streamCompletion(cfg, {
           system: SYSTEM,
           user: userPrompt,
-          maxTokens: MAX_OUTPUT_TOKENS,
+          maxTokens: maxOutputTokens(cfg.thinks),
           signal: req.signal,
           onDelta: (d) => {
             answer += d;
@@ -107,7 +117,6 @@ export async function POST(req: NextRequest) {
         });
         usageIn = result.usageIn;
         usageOut = result.usageOut;
-        if (!result.text.trim()) throw new Error("empty response");
         if (result.truncated) {
           failed = true; // don't cache a half answer
           controller.enqueue(encoder.encode("\n\n_(Cut short — try a shorter passage.)_"));
@@ -121,7 +130,9 @@ export async function POST(req: NextRequest) {
         failed = true;
         const aborted = (e as Error)?.name === "AbortError" || req.signal.aborted;
         if (!aborted) {
-          controller.enqueue(encoder.encode(`\n\n[[ERROR]] ${friendlyError(e, cfg.label)}`));
+          // The full error goes to the server log (Vercel → Logs) for debugging.
+          console.error("[plain] provider failed", { provider: cfg.provider, model: cfg.model, error: e });
+          controller.enqueue(encoder.encode(`\n\n[[ERROR]] ${friendlyError(e, cfg)}`));
         }
       } finally {
         try {

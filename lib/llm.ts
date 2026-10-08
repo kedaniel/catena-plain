@@ -17,13 +17,16 @@ import OpenAI from "openai";
  */
 export type ProviderName = "anthropic" | "gemini" | "deepseek" | "groq" | "openrouter" | "custom";
 
-type Preset = { baseURL: string; defaultModel?: string; label: string };
+type Preset = { baseURL: string; defaultModel?: string; label: string; thinks?: boolean };
 
 const PRESETS: Record<Exclude<ProviderName, "anthropic">, Preset> = {
   gemini: {
     baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
     defaultModel: "gemini-3.8-flash",
     label: "Google Gemini",
+    // Gemini 3 models reason before answering, and that reasoning is charged
+    // against the output budget, so the budget has to be generous.
+    thinks: true,
   },
   deepseek: { baseURL: "https://api.deepseek.com/v1", defaultModel: "deepseek-chat", label: "DeepSeek" },
   groq: { baseURL: "https://api.groq.com/openai/v1", label: "Groq" },
@@ -41,7 +44,15 @@ function providerName(): ProviderName {
 }
 
 export type Config =
-  | { ok: true; provider: ProviderName; label: string; model: string; baseURL?: string; apiKey: string }
+  | {
+      ok: true;
+      provider: ProviderName;
+      label: string;
+      model: string;
+      baseURL?: string;
+      apiKey: string;
+      thinks: boolean;
+    }
   | { ok: false; error: string };
 
 export function config(): Config {
@@ -62,6 +73,7 @@ export function config(): Config {
       label: "Claude",
       model: process.env.ANTHROPIC_MODEL || "claude-haiku-5-5",
       apiKey,
+      thinks: false,
     };
   }
 
@@ -80,7 +92,7 @@ export function config(): Config {
       error: `The app isn't set up yet: LLM_MODEL is missing. Pick a model from ${preset.label} and set it.`,
     };
   }
-  return { ok: true, provider, label: preset.label, model, baseURL, apiKey };
+  return { ok: true, provider, label: preset.label, model, baseURL, apiKey, thinks: preset.thinks === true };
 }
 
 export type StreamOpts = {
@@ -92,6 +104,13 @@ export type StreamOpts = {
 };
 
 export type StreamResult = { text: string; usageIn: number; usageOut: number; truncated: boolean };
+
+/** Thrown when the provider answered but wrote no usable text. */
+export class EmptyAnswerError extends Error {
+  constructor(public reason: string) {
+    super(`no text returned (${reason})`);
+  }
+}
 
 export async function streamCompletion(cfg: Extract<Config, { ok: true }>, o: StreamOpts): Promise<StreamResult> {
   if (cfg.provider === "anthropic") {
@@ -111,6 +130,7 @@ export async function streamCompletion(cfg: Extract<Config, { ok: true }>, o: St
       o.onDelta(d);
     });
     const final = await s.finalMessage();
+    if (!text.trim()) throw new EmptyAnswerError(final.stop_reason ?? "unknown");
     return {
       text,
       usageIn: final.usage.input_tokens,
@@ -119,18 +139,25 @@ export async function streamCompletion(cfg: Extract<Config, { ok: true }>, o: St
     };
   }
 
-  const client = new OpenAI({ apiKey: cfg.apiKey, baseURL: cfg.baseURL });
+  const client = new OpenAI({ apiKey: cfg.apiKey, baseURL: cfg.baseURL, maxRetries: 1 });
+
+  // stream_options is not supported everywhere, so it is opt-in. Usage is read
+  // from any chunk that happens to carry it, which most providers send anyway.
+  const body: Record<string, unknown> = {
+    model: cfg.model,
+    max_tokens: o.maxTokens,
+    messages: [
+      { role: "system", content: o.system },
+      { role: "user", content: o.user },
+    ],
+    stream: true,
+  };
+  if (process.env.LLM_STREAM_USAGE === "1") body.stream_options = { include_usage: true };
+  const effort = (process.env.LLM_REASONING_EFFORT || "").trim();
+  if (effort) body.reasoning_effort = effort;
+
   const stream = await client.chat.completions.create(
-    {
-      model: cfg.model,
-      max_tokens: o.maxTokens,
-      messages: [
-        { role: "system", content: o.system },
-        { role: "user", content: o.user },
-      ],
-      stream: true,
-      stream_options: { include_usage: true },
-    },
+    body as unknown as OpenAI.ChatCompletionCreateParamsStreaming,
     { signal: o.signal },
   );
 
@@ -138,6 +165,7 @@ export async function streamCompletion(cfg: Extract<Config, { ok: true }>, o: St
   let usageIn = 0;
   let usageOut = 0;
   let truncated = false;
+  let finish = "";
   for await (const chunk of stream) {
     const choice = chunk.choices?.[0];
     const delta = choice?.delta?.content;
@@ -145,28 +173,50 @@ export async function streamCompletion(cfg: Extract<Config, { ok: true }>, o: St
       text += delta;
       o.onDelta(delta);
     }
-    if (choice?.finish_reason === "length") truncated = true;
+    if (choice?.finish_reason) {
+      finish = choice.finish_reason;
+      if (choice.finish_reason === "length") truncated = true;
+    }
     if (chunk.usage) {
-      usageIn = chunk.usage.prompt_tokens ?? 0;
-      usageOut = chunk.usage.completion_tokens ?? 0;
+      usageIn = chunk.usage.prompt_tokens ?? usageIn;
+      usageOut = chunk.usage.completion_tokens ?? usageOut;
     }
   }
+  if (!text.trim()) throw new EmptyAnswerError(finish || "no finish reason");
   return { text, usageIn, usageOut, truncated };
 }
 
+const scrub = (s: string) =>
+  s
+    .replace(/sk-[A-Za-z0-9_-]{8,}/g, "sk-***")
+    .replace(/AIza[A-Za-z0-9_-]{10,}/g, "AIza***")
+    .replace(/key=[A-Za-z0-9_-]+/gi, "key=***")
+    .slice(0, 300);
+
 /** Viewer-facing copy for a provider failure. */
-export function friendlyError(e: unknown, label: string): string {
+export function friendlyError(e: unknown, cfg: { label: string; model: string }): string {
+  const { label, model } = cfg;
+
+  if (e instanceof EmptyAnswerError) {
+    if (e.reason === "length" || e.reason === "max_tokens") {
+      return `${label} ran out of its answer budget before writing anything. Raise MAX_OUTPUT_TOKENS (try 6000) or use a smaller model.`;
+    }
+    return `${label} returned no text (${e.reason}). Try a shorter passage, or a different model.`;
+  }
+
   const status =
     e instanceof Anthropic.APIError ? e.status : e instanceof OpenAI.APIError ? e.status : undefined;
-  const msg = (e instanceof Error ? e.message : String(e)).toLowerCase();
+  const raw = e instanceof Error ? e.message : String(e);
+  const msg = raw.toLowerCase();
 
   if (msg.includes("usage limit") || msg.includes("credit balance") || msg.includes("insufficient"))
     return `${label} says the account has no credit or has hit its spending limit.`;
-  if (status === 400 && (msg.includes("model") || msg.includes("not found")))
-    return `${label} doesn't recognise the model name. Check the LLM_MODEL setting.`;
-  if (status === 401 || status === 403) return `The app's ${label} key isn't valid. Tell the person who runs the app.`;
-  if (status === 404) return `${label} couldn't find that model. Check the LLM_MODEL setting.`;
+  if (status === 401 || status === 403) return `The app's ${label} key isn't valid or lacks access.`;
+  if (status === 404 || (status === 400 && (msg.includes("model") || msg.includes("not found"))))
+    return `${label} doesn't recognise the model "${model}". Set LLM_MODEL to a model it offers. Details: ${scrub(raw)}`;
   if (status === 429) return `${label} is rate-limiting the app. Wait a minute and try again.`;
+  if (status === 400)
+    return `${label} rejected the request. Details: ${scrub(raw)}`;
   if (status === 529 || (status ?? 0) >= 500) return `${label} is busy right now. Try again shortly.`;
-  return "Couldn't process this. Try a different or shorter passage.";
+  return `Couldn't get an answer from ${label}. Details: ${scrub(raw)}`;
 }
