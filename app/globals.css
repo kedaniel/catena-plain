@@ -5,6 +5,7 @@
   --f-text: "Gentium Book Plus", Georgia, "Times New Roman", serif;
   --f-ui: "IBM Plex Sans", "IBM Plex Sans Arabic", system-ui, -apple-system, "Segoe UI", sans-serif;
   --f-ar: "IBM Plex Sans Arabic", "Noto Naskh Arabic", Tahoma, sans-serif;
+  --f-hand: "Caveat", "Segoe Script", cursive;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -72,7 +73,10 @@ select:focus { outline: 2px solid var(--lapis); outline-offset: 1px; }
 
 fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
 .seg { display: flex; flex-wrap: wrap; gap: 6px; }
-.seg input { position: absolute; opacity: 0; pointer-events: none; }
+/* Each option wraps its own hidden radio, so the absolutely positioned input
+   stays inside the chip instead of escaping to the page and overlapping. */
+.seg > span { position: relative; display: inline-flex; }
+.seg input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; margin: 0; pointer-events: none; }
 .seg label { border: 1px solid var(--line); border-radius: 999px; padding: 6px 13px; cursor: pointer; font-size: 14px; background: var(--bg); }
 .seg input:checked + label { background: var(--lapis-soft); border-color: var(--lapis); color: var(--lapis); font-weight: 600; }
 .seg input:focus-visible + label { outline: 2px solid var(--lapis); outline-offset: 1px; }
@@ -121,3 +125,7 @@ button:disabled { opacity: 0.55; cursor: default; }
 .diag summary { cursor: pointer; }
 .diag .actions { margin-top: 10px; }
 .diag-out { margin: 10px 0 0; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 7px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; color: var(--ink); direction: ltr; text-align: left; }
+
+/* Signed off in the maker's hand */
+.made { margin: 30px 0 4px; text-align: center; font-family: var(--f-hand); font-size: 20px; line-height: 1.4; color: var(--muted); }
+.made .heart { color: var(--gold); }

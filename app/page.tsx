@@ -497,6 +497,10 @@ export default function Home() {
 
       <p className="note">{t.note}</p>
 
+      <p className="made">
+        {t.made} <span className="heart">&#9829;</span>
+      </p>
+
       <details className="diag">
         <summary>Setup check</summary>
         <div className="actions">

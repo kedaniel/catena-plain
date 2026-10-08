@@ -5,7 +5,7 @@ export type Level = "simple" | "study";
  * Bumped whenever the prompt changes shape, so cached answers in the old shape
  * are never served alongside new ones.
  */
-export const PROMPT_VERSION = "v2-full-then-summary";
+export const PROMPT_VERSION = "v3-full-then-summary-no-glossary";
 
 export const SYSTEM = `You help church study groups read Church Fathers' commentaries from the Catena Bible app. Catena uses old 19th-century English translations that are hard for modern readers.
 
@@ -28,9 +28,7 @@ Render the ENTIRE commentary, from its first sentence to its last, in clear mode
 - Keep his voice and his rhetorical questions; only the difficulty of the language changes.
 - Write it as flowing paragraphs, keeping his paragraph breaks where you can see them.
 - If a phrase is genuinely unclear in the old translation, render your best reading and mark it with [unclear].
-
-## Words explained
-A bullet list: **old word or phrase** — meaning. Only words a modern reader would stumble on. Write "None" if there are none.
+- Where an old or theological word has no plain equivalent, keep it and put a short gloss in brackets right after it, e.g. "propitiation (making peace by taking away sin)". Do not add a glossary section.
 
 ## Summary
 Three to six sentences: what the passage is about and the single main point the Father is making. This is the only place where you compress.`;
@@ -39,9 +37,8 @@ const LANG_RULE: Record<Lang, string> = {
   en: "Write everything in clear, modern English.",
   ar: `Write everything in clear Modern Standard Arabic, the way an Arabic-speaking (e.g. Coptic) church Bible study would explain it. Quote Bible verses in the Van Dyck Arabic Bible wording. Use these Arabic headings instead of the English ones:
 ## النص الكامل بلغة بسيطة
-## شرح الكلمات
 ## الملخص`,
-  both: `Give the full text twice: first in clear modern English under "## Full text in plain language", then the SAME full rendering in clear Modern Standard Arabic under "## النص الكامل بلغة بسيطة". Both must be complete, not summaries. Then write "## Words explained" once, giving each explained word its Arabic equivalent in brackets, and "## Summary" once in English followed by "## الملخص" in Arabic.`,
+  both: `Give the full text twice: first in clear modern English under "## Full text in plain language", then the SAME full rendering in clear Modern Standard Arabic under "## النص الكامل بلغة بسيطة". Both must be complete, not summaries. Then write "## Summary" once in English, followed by "## الملخص" in Arabic.`,
 };
 
 const LEVEL_RULE: Record<Level, string> = {
