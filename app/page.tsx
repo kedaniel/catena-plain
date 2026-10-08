@@ -226,6 +226,8 @@ export default function Home() {
         j.stage && !j.ok && `stage: ${j.stage}`,
         j.keyShape && `key: ${j.keyShape}`,
         j.auth && `auth: ${j.auth}`,
+        j.chain && `tries: ${j.chain}`,
+        j.answeredBy && `answered by: ${j.answeredBy}`,
         j.cache && `cache: ${j.cache}`,
       ]
         .filter(Boolean)

@@ -20,6 +20,11 @@ export class GeminiError extends Error {
   }
 }
 
+/** Worth trying a different model or waiting: overloaded, rate-limited, or a blip. */
+export function isRetryable(status: number): boolean {
+  return status === 429 || status === 500 || status === 503 || status === 529;
+}
+
 export type GeminiStreamResult = {
   text: string;
   usageIn: number;
@@ -53,21 +58,12 @@ export async function geminiStream(opts: {
     generationConfig: { maxOutputTokens: opts.maxOutputTokens, temperature: 0.2 },
   });
 
-  // Gemini returns a 500 or 503 often enough on a long prompt that one retry is
-  // worth more than a failed answer. Nothing has streamed yet at this point, so
-  // retrying cannot duplicate visible text.
-  let res: Response | null = null;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    res = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-goog-api-key": opts.apiKey },
-      body: payload,
-      signal: opts.signal,
-    });
-    if (res.status < 500 || attempt === 1 || opts.signal.aborted) break;
-    await new Promise((r) => setTimeout(r, 1500));
-  }
-  if (!res) throw new GeminiError("No response from Gemini", 0, "");
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-goog-api-key": opts.apiKey },
+    body: payload,
+    signal: opts.signal,
+  });
 
   if (!res.ok || !res.body) {
     const body = await res.text().catch(() => "");

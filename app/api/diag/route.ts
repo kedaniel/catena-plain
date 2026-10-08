@@ -55,14 +55,16 @@ export async function POST(req: NextRequest) {
         });
       }
       base.keyWorks = true;
-      base.modelAvailable = listed.models.includes(cfg.model);
-      if (!base.modelAvailable) {
+      const usable = cfg.models.filter((m) => listed.models.includes(m));
+      base.chain = cfg.models.join(" → ");
+      base.usable = usable.length ? usable.join(", ") : "none";
+      if (!usable.length) {
         const flash = listed.models.filter((m) => m.includes("flash")).slice(0, 12);
         return NextResponse.json({
           ok: false,
           stage: "model",
           ...base,
-          message: `Your key works, but it can't use "${cfg.model}". Set LLM_MODEL to one of the names below.`,
+          message: `Your key works, but it can't use any of the models the app tries. Set LLM_MODEL to one of the names below.`,
           body: (flash.length ? flash : listed.models.slice(0, 12)).join("\n"),
         });
       }
@@ -129,7 +131,8 @@ export async function POST(req: NextRequest) {
       ...base,
       reply: r.text.trim().slice(0, 120),
       tokens: { in: r.usageIn, out: r.usageOut },
-      message: `${cfg.label} answered.`,
+      answeredBy: r.modelUsed ?? cfg.model,
+      message: `${cfg.label} answered${r.modelUsed && r.modelUsed !== cfg.model ? ` using ${r.modelUsed}` : ""}.`,
     });
   } catch (e) {
     console.error("[diag] stream failed", { provider: cfg.provider, model: cfg.model, error: e });

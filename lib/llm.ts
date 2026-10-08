@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
-import { GEMINI_ROOT, GeminiError, geminiStream } from "./gemini";
+import { GEMINI_ROOT, GeminiError, geminiStream, isRetryable } from "./gemini";
 
 /**
  * The app can talk to Claude or to any OpenAI-compatible provider, so you can
@@ -32,6 +32,8 @@ type Preset = {
   thinks?: boolean;
   /** Set when the provider is called through its own API instead of the OpenAI shape. */
   native?: "gemini";
+  /** Lighter models to fall back to when the preferred one is overloaded. */
+  fallbacks?: string[];
 };
 
 const PRESETS: Record<Exclude<ProviderName, "anthropic">, Preset> = {
@@ -46,6 +48,9 @@ const PRESETS: Record<Exclude<ProviderName, "anthropic">, Preset> = {
     // against the output budget, so the budget has to be generous.
     thinks: true,
     native: "gemini",
+    // The newest model is the most in demand and answers 503 under load on the
+    // free tier, so quieter models stand behind it.
+    fallbacks: ["gemini-3.5-flash-lite", "gemini-3.7-flash", "gemini-3.1-flash-lite"],
   },
   // The compatibility layer, kept for anyone whose older AIza key prefers it.
   "gemini-openai": {
@@ -79,6 +84,8 @@ export type Config =
       apiKey: string;
       thinks: boolean;
       native?: "gemini";
+      /** Tried in order; the first that answers is used. */
+      models: string[];
     }
   | { ok: false; error: string };
 
@@ -101,6 +108,7 @@ export function config(): Config {
       model: (process.env.ANTHROPIC_MODEL || "claude-haiku-5-5").trim(),
       apiKey: apiKey.trim(),
       thinks: false,
+      models: [(process.env.ANTHROPIC_MODEL || "claude-haiku-5-5").trim()],
     };
   }
 
@@ -121,6 +129,16 @@ export function config(): Config {
       error: `The app isn't set up yet: LLM_MODEL is missing. Pick a model from ${preset.label} and set it.`,
     };
   }
+  // An explicit LLM_FALLBACK_MODELS wins; "none" switches falling back off.
+  const configured = (process.env.LLM_FALLBACK_MODELS || "").trim();
+  const fallbacks =
+    configured.toLowerCase() === "none"
+      ? []
+      : configured
+        ? configured.split(",").map((m) => m.trim()).filter(Boolean)
+        : (preset.fallbacks ?? []);
+  const models = [model, ...fallbacks.filter((m) => m !== model)];
+
   return {
     ok: true,
     provider,
@@ -130,6 +148,7 @@ export function config(): Config {
     apiKey,
     thinks: preset.thinks === true,
     native: preset.native,
+    models,
   };
 }
 
@@ -141,7 +160,14 @@ export type StreamOpts = {
   onDelta: (delta: string) => void;
 };
 
-export type StreamResult = { text: string; usageIn: number; usageOut: number; truncated: boolean };
+export type StreamResult = {
+  text: string;
+  usageIn: number;
+  usageOut: number;
+  truncated: boolean;
+  /** Which model actually answered, when a fallback was used. */
+  modelUsed?: string;
+};
 
 /** Thrown when the provider answered but wrote no usable text. */
 export class EmptyAnswerError extends Error {
@@ -178,18 +204,37 @@ export async function streamCompletion(cfg: Extract<Config, { ok: true }>, o: St
   }
 
   if (cfg.native === "gemini") {
-    const r = await geminiStream({
-      root: cfg.baseURL,
-      apiKey: cfg.apiKey,
-      model: cfg.model,
-      system: o.system,
-      user: o.user,
-      maxOutputTokens: o.maxTokens,
-      signal: o.signal,
-      onDelta: o.onDelta,
-    });
-    if (!r.text.trim()) throw new EmptyAnswerError(r.finishReason || "no finish reason");
-    return { text: r.text, usageIn: r.usageIn, usageOut: r.usageOut, truncated: r.truncated };
+    // The free tier's newest model answers 503 under load, so each model in the
+    // chain is tried in turn. Once text has reached the reader a later attempt
+    // would duplicate it, so from that moment the error is passed on instead.
+    let streamed = false;
+    const onDelta = (d: string) => {
+      streamed = true;
+      o.onDelta(d);
+    };
+    let last: unknown = null;
+    for (let i = 0; i < cfg.models.length; i++) {
+      try {
+        const r = await geminiStream({
+          root: cfg.baseURL,
+          apiKey: cfg.apiKey,
+          model: cfg.models[i],
+          system: o.system,
+          user: o.user,
+          maxOutputTokens: o.maxTokens,
+          signal: o.signal,
+          onDelta,
+        });
+        if (!r.text.trim()) throw new EmptyAnswerError(r.finishReason || "no finish reason");
+        return { text: r.text, usageIn: r.usageIn, usageOut: r.usageOut, truncated: r.truncated, modelUsed: cfg.models[i] };
+      } catch (e) {
+        last = e;
+        const retryable = e instanceof GeminiError && isRetryable(e.status);
+        if (streamed || !retryable || o.signal.aborted || i === cfg.models.length - 1) throw e;
+        await new Promise((r) => setTimeout(r, 800));
+      }
+    }
+    throw last;
   }
 
   const client = new OpenAI({ apiKey: cfg.apiKey, baseURL: cfg.baseURL, maxRetries: 1 });
@@ -289,7 +334,12 @@ export function friendlyError(e: unknown, cfg: { label: string; model: string })
   if (status === 429) return `${label} is rate-limiting the app. Wait a minute and try again.`;
   if (status === 400)
     return `${label} rejected the request. Details: ${scrub(raw)}`;
+  if (status === 503)
+    return (
+      `${label} is overloaded on every model the app tried. This is the free tier under load — ` +
+      `wait a few minutes, or set LLM_MODEL to a quieter model such as gemini-3.5-flash-lite. Details: ${scrub(raw)}`
+    );
   if (status === 529 || (status ?? 0) >= 500)
-    return `${label} returned a server error (HTTP ${status}) even after a retry. Details: ${scrub(raw)}`;
+    return `${label} returned a server error (HTTP ${status}) on every model tried. Details: ${scrub(raw)}`;
   return `Couldn't get an answer from ${label}. Details: ${scrub(raw)}`;
 }
