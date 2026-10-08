@@ -294,25 +294,15 @@ export async function fetchCatenaText(raw: string): Promise<{ title: string; tex
   try {
     page = await get(target);
   } catch (e) {
-    // "?p=" carries the verse context and can go stale; the page itself may
-    // still be there without it.
-    if (e instanceof NotFoundError && target.search) {
-      const bare = new URL(target.toString());
-      bare.search = "";
-      try {
-        page = await get(bare);
-      } catch {
-        throw new CatenaError(
-          "Catena no longer has that commentary at this address. Pick another Father, or open it in Catena and paste its link.",
-        );
-      }
-    } else if (e instanceof NotFoundError) {
+    // The "?p=" token scopes a commentary to the verse it was listed under.
+    // Retrying without it returns a different portion of the same work, so the
+    // reader would silently get a commentary on another passage. Fail instead.
+    if (e instanceof NotFoundError) {
       throw new CatenaError(
-        "Catena no longer has that commentary at this address. Pick another Father, or open it in Catena and paste its link.",
+        "Catena wouldn't open that commentary. Pick another Father, or open it in Catena and paste its link.",
       );
-    } else {
-      throw e;
     }
+    throw e;
   }
   const { $, url } = page;
 
