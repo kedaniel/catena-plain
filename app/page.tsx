@@ -270,6 +270,26 @@ export default function Home() {
     setOwnKeyMsg(t.ownKeyOff);
   }
 
+  const [inspect, setInspect] = useState("");
+  async function inspectChosen() {
+    if (!chosen) {
+      setInspect("Pick a Father first, then press this.");
+      return;
+    }
+    setInspect("…");
+    try {
+      const r = await fetch("/api/inspect", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-access-code": code },
+        body: JSON.stringify({ link: chosen.url, excerpt: chosen.preview }),
+      });
+      const j = await r.json();
+      setInspect(JSON.stringify(j, null, 2));
+    } catch {
+      setInspect(t.offline);
+    }
+  }
+
   const [diag, setDiag] = useState("");
   async function testConnection() {
     setDiag("…");
@@ -607,8 +627,10 @@ export default function Home() {
         <summary>Setup check</summary>
         <div className="actions">
           <button onClick={testConnection}>Test connection</button>
+          <button onClick={inspectChosen}>Why this text?</button>
         </div>
         {diag && <pre className="diag-out">{diag}</pre>}
+        {inspect && <pre className="diag-out">{inspect}</pre>}
       </details>
     </main>
   );
