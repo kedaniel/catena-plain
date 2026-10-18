@@ -184,6 +184,15 @@ function nextPageUrl($: cheerio.CheerioAPI, url: URL): URL | null {
 const MAX_PAGES = 6;
 
 /**
+ * Catena's verse pages render inconsistently: the same URL can come back once
+ * saying "No commentary on this verse yet" and again with the full list. It is
+ * proven, not guessed — two fetches of /verse/nkjv/ez/47/1 seconds apart gave
+ * nothing and then Ephrem and Jerome. So an empty list is retried a couple of
+ * times, with a changing query so no cache can serve the empty render back.
+ */
+const EMPTY_RETRIES = 3;
+
+/**
  * Catena renders only the first batch of commentaries into the page and loads
  * the rest with JavaScript, behind a button reading "Show 12 more (53 left)".
  * Reading that number lets the app say how many it cannot reach, rather than
@@ -258,7 +267,22 @@ export async function fetchFathers(
       clean($("title").first().text());
 
     const seen = new Set<string>();
-    const options = harvest($, url, seen);
+    let options = harvest($, url, seen);
+    let doc = $;
+
+    for (let attempt = 1; attempt <= EMPTY_RETRIES && !options.length; attempt++) {
+      await new Promise((r) => setTimeout(r, 400 * attempt));
+      const bust = new URL(url.toString());
+      bust.searchParams.set("_", String(Date.now()));
+      try {
+        const again = await get(bust);
+        options = harvest(again.$, url, seen); // resolve hrefs against the clean URL
+        if (options.length) doc = again.$;
+      } catch {
+        break;
+      }
+    }
+
     if (!options.length) {
       loadedButEmpty = true;
       continue;
@@ -266,7 +290,7 @@ export async function fetchFathers(
 
     let pages = 1;
     let complete = true;
-    let current = { $, url };
+    let current = { $: doc, url };
     // Only an explicit next-page link on the verse's own path is followed.
     // Guessing "?page=2" was wrong: Catena ignores the verse filter on those
     // pages and returns unrelated commentaries, so a verse with 13 of them
@@ -288,7 +312,7 @@ export async function fetchFathers(
       if (pages >= MAX_PAGES) complete = false;
     }
 
-    const hidden = hiddenCount($);
+    const hidden = hiddenCount(doc);
     if (lookup.bookKey) {
       const code = url.pathname.split("/").filter(Boolean)[2];
       if (code) void rememberBookCode(lookup.bookKey, code);

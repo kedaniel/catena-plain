@@ -54,6 +54,8 @@ A **Paste text** tab handles text copied straight out of Catena.
 Catena's own verse pages render the commentary list server-side at
 `catenabible.com/verse/nkjv/<book>/<chapter>/<verse>`, which is what the app reads.
 
+**Catena renders inconsistently.** The same verse URL can come back once saying "No commentary on this verse yet" and again with the full list — two fetches of `/verse/nkjv/ez/47/1` seconds apart gave nothing, then Ephrem and Jerome. An empty list is therefore retried a few times with a changing query string, so no cache can serve the empty render back. Only after that does the app report a verse as having none.
+
 **What the app can and cannot see.** Catena renders only the first batch of commentaries into the page — typically 12 — and loads the rest with JavaScript behind a button reading "Show 12 more (53 left)". A server-side reader cannot reach those. The app reads that number and tells the reader "Showing 12 of 65" rather than presenting a partial list as complete. For a commentary that isn't listed, open it in Catena and paste its own link.
 
 The app follows a further page only when the verse page offers an explicit "next" link on its own path. It does **not** guess `?page=N`: Catena serves those pages without applying the verse filter, so guessing returned unrelated commentaries — a verse with 13 of them came back with 150, and the extra links 404 when opened. For the same reason a "related verse" link is never followed, however its text reads. If a commentary is missing from the list, open it in Catena and paste its own link.
