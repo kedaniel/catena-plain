@@ -290,6 +290,91 @@ export default function Home() {
     }
   }
 
+  const [selfTest, setSelfTest] = useState("");
+  const [selfTestBusy, setSelfTestBusy] = useState(false);
+  async function runSelfTest() {
+    if (selfTestBusy) return;
+    setSelfTestBusy(true);
+    const verses = [
+      "Genesis 1:1",
+      "Genesis 37:18",
+      "Exodus 3:2",
+      "Psalms 23:1",
+      "Isaiah 53:5",
+      "Ezekiel 47:1",
+      "Matthew 5:8",
+      "John 1:18",
+      "Romans 8:28",
+      "1 Corinthians 13:4",
+    ];
+    const headers = {
+      "content-type": "application/json",
+      "x-access-code": code,
+      ...(ownKey ? { "x-llm-key": ownKey } : {}),
+    };
+    const lines: string[] = [`SELF-TEST ${new Date().toISOString()}`];
+    let checked = 0;
+    let found = 0;
+    let failed = 0;
+    const show = () => setSelfTest(lines.join("\n"));
+    const call = async (payload: Record<string, unknown>) => {
+      try {
+        const r = await fetch("/api/selftest", { method: "POST", headers, body: JSON.stringify(payload) });
+        return await r.json();
+      } catch {
+        return { ok: false, error: "request failed or timed out" };
+      }
+    };
+
+    for (let i = 0; i < verses.length; i++) {
+      lines.push(`[${i + 1}/${verses.length}] ${verses[i]} …`);
+      show();
+      const j = await call({ verse: verses[i] });
+      lines.pop();
+      if (!j.ok) {
+        lines.push(`[${i + 1}/${verses.length}] ${verses[i]} — FAILED: ${j.error ?? "unknown"}`);
+        failed++;
+        show();
+        continue;
+      }
+      lines.push(`[${i + 1}/${verses.length}] ${verses[i]} — listed ${j.listed}, hidden ${j.hidden} (${j.title})`);
+      for (const c of j.commentaries ?? []) {
+        checked++;
+        if (c.error) {
+          lines.push(`   x ${c.father}: ERROR ${c.error}`);
+        } else if (c.scoped) {
+          found++;
+          lines.push(`   ok ${c.father}: page ${c.pageChars}, excerpt found (${c.prefixFound}), kept ${c.scopedChars}`);
+        } else {
+          lines.push(
+            `   MISS ${c.father}: page ${c.pageChars}, excerpt ${c.excerptChars} chars NOT in text, in raw html: ${c.inRawHtml ? "yes" : "no"} | page starts: ${c.scopedStart}`,
+          );
+        }
+      }
+      show();
+    }
+    lines.push(`RETRIEVAL: ${found}/${checked} commentaries located; ${failed} passages failed`);
+    show();
+
+    for (const v of ["Exodus 3:2", "Genesis 37:18"]) {
+      for (const lang of ["en", "ar"]) {
+        lines.push(`MODEL ${lang} ${v} …`);
+        show();
+        const j = await call({ verse: v, lang });
+        lines.pop();
+        lines.push(
+          j.ok
+            ? `MODEL ${lang} ${v} (${j.father}, ${j.model}): source ${j.sourceChars}, output ${j.outputChars}, ratio ${j.ratio}, full-text heading ${j.hasFullTextHeading ? "yes" : "NO"}, summary heading ${j.hasSummaryHeading ? "yes" : "NO"}, mismatch note ${j.mismatchNote ? "YES" : "no"}, arabic share ${j.scriptShare}${j.arabicNameUsed === null ? "" : `, arabic name ${j.arabicNameUsed ? "ok" : "MISSING"}`}, truncated ${j.truncated ? "YES" : "no"} | ${j.firstLine}`
+            : `MODEL ${lang} ${v} — FAILED: ${j.error ?? "unknown"}`,
+        );
+        show();
+      }
+    }
+    lines.push("DONE");
+    show();
+    setSelfTestBusy(false);
+  }
+
   const [diag, setDiag] = useState("");
   async function testConnection() {
     setDiag("…");
@@ -628,9 +713,16 @@ export default function Home() {
         <div className="actions">
           <button onClick={testConnection}>Test connection</button>
           <button onClick={inspectChosen}>Why this text?</button>
+          <button onClick={runSelfTest} disabled={selfTestBusy}>
+            {selfTestBusy ? "Running self-test…" : "Run self-test (10 passages)"}
+          </button>
+          {selfTest && !selfTestBusy && (
+            <button onClick={() => navigator.clipboard.writeText(selfTest).catch(() => {})}>Copy report</button>
+          )}
         </div>
         {diag && <pre className="diag-out">{diag}</pre>}
         {inspect && <pre className="diag-out">{inspect}</pre>}
+        {selfTest && <pre className="diag-out">{selfTest}</pre>}
       </details>
     </main>
   );

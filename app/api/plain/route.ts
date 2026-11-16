@@ -89,9 +89,13 @@ export async function POST(req: NextRequest) {
   let text = pasted;
   let pageTitle = "";
   let sourceUrl = "";
+  // A commentary longer than the input cap is cut. The reader is told, so a
+  // partial rendering is never mistaken for the whole.
+  let sourceCut = false;
   if (!pasted && canonical) {
     try {
       const page = await fetchCatenaText(canonical, excerpt);
+      sourceCut = page.text.length > MAX_INPUT_CHARS;
       text = page.text.slice(0, MAX_INPUT_CHARS);
       pageTitle = page.title;
       sourceUrl = page.url;
@@ -126,6 +130,14 @@ export async function POST(req: NextRequest) {
         if (result.truncated) {
           failed = true; // don't cache a half answer
           controller.enqueue(encoder.encode("\n\n_(Cut short — try a shorter passage.)_"));
+        }
+        if (sourceCut) {
+          const cutNote =
+            lang === "ar"
+              ? "\n\n**ملاحظة:** هذا التفسير طويل، والنص أعلاه يغطي الجزء الأول منه فقط. اقرأ الباقي في Catena من الرابط أدناه."
+              : "\n\n**Note:** this commentary is long, and the text above covers only its first part. Read the rest in Catena at the link below.";
+          answer += cutNote;
+          controller.enqueue(encoder.encode(cutNote));
         }
         if (sourceUrl) {
           const tail = `\n\nSource: ${sourceUrl}`;

@@ -43,7 +43,7 @@ export function isCommentaryUrl(u: URL): boolean {
   return /^\/(com|commentary)\//.test(u.pathname);
 }
 
-async function get(u: URL): Promise<{ $: cheerio.CheerioAPI; url: URL }> {
+async function get(u: URL): Promise<{ $: cheerio.CheerioAPI; url: URL; html: string }> {
   let cur = u;
   let res: Response | null = null;
   for (let hop = 0; hop < 3; hop++) {
@@ -64,7 +64,8 @@ async function get(u: URL): Promise<{ $: cheerio.CheerioAPI; url: URL }> {
   if (!res.ok) throw new CatenaError(`Catena didn't return the page (status ${res.status}).`);
   const buf = await res.arrayBuffer();
   if (buf.byteLength > MAX_BYTES) throw new CatenaError("That page is too large to read.");
-  return { $: cheerio.load(new TextDecoder().decode(buf)), url: cur };
+  const html = new TextDecoder().decode(buf);
+  return { $: cheerio.load(html), url: cur, html };
 }
 
 /**
@@ -358,9 +359,18 @@ function sliceFromExcerpt(text: string, excerpt?: string): string {
   // Compare letters and digits only. Catena's excerpt and its page body differ
   // in spacing, quote style, footnote markers and even word breaks — its text
   // carries artifacts like "Scrip tures" — and all of that disappears here.
+  // Short bracketed groups such as "[1]" are footnote markers and are skipped
+  // on both sides, since either side may carry one the other lacks.
   const compact: string[] = [];
   const indexInText: number[] = [];
   for (let i = 0; i < text.length; i++) {
+    if (text[i] === "[") {
+      const close = text.indexOf("]", i);
+      if (close > i && close - i <= 6) {
+        i = close;
+        continue;
+      }
+    }
     const c = text[i].toLowerCase();
     if ((c >= "a" && c <= "z") || (c >= "0" && c <= "9")) {
       compact.push(c);
@@ -368,11 +378,7 @@ function sliceFromExcerpt(text: string, excerpt?: string): string {
     }
   }
   const hay = compact.join("");
-
-  const needleFull = excerpt
-    .toLowerCase()
-    .replace(/\[[^\]]*\]/g, " ") // footnote markers and bracketed links
-    .replace(/[^a-z0-9]/g, "");
+  const needleFull = lettersOnly(excerpt);
   if (needleFull.length < 20) return text;
 
   // Longest anchor first; a shorter one still finds the place if the excerpt
@@ -382,7 +388,110 @@ function sliceFromExcerpt(text: string, excerpt?: string): string {
     const at = hay.indexOf(needleFull.slice(0, len));
     if (at >= 0) return text.slice(indexInText[at]);
   }
+
+  // The opening itself may be damaged on one side (a stray footnote number, a
+  // dropped word). Anchor on a later stretch of the excerpt and step back by
+  // the same distance, which lands at the opening give or take a few letters.
+  for (const skip of [15, 30, 50, 80]) {
+    const piece = needleFull.slice(skip, skip + 30);
+    if (piece.length < 30) break;
+    const at = hay.indexOf(piece);
+    if (at >= 0) {
+      // The landing spot is approximate, so snap back to the start of the
+      // sentence it falls in (or failing that, the word) rather than open the
+      // reader's text mid-word.
+      const approx = indexInText[Math.max(0, at - skip)];
+      const windowStart = Math.max(0, approx - 200);
+      const before = text.slice(windowStart, approx);
+      const sentence = Math.max(before.lastIndexOf(". "), before.lastIndexOf("? "), before.lastIndexOf("! "), before.lastIndexOf("\n"));
+      if (sentence >= 0) return text.slice(windowStart + sentence + 1).trimStart();
+      const word = before.lastIndexOf(" ");
+      return text.slice(word >= 0 ? windowStart + word + 1 : approx);
+    }
+  }
   return text;
+}
+
+/**
+ * All the readable text of a page, in document order.
+ *
+ * An earlier version kept only "leaf" blocks from a fixed list of tags, which
+ * silently dropped any text sitting directly inside a section, article or span,
+ * or inside a div that also had block children. Nothing is dropped now: page
+ * chrome is removed, block boundaries become line breaks, and the whole body is
+ * read. Repeated lines are collapsed.
+ */
+function readableText($: cheerio.CheerioAPI): string {
+  $("script, style, noscript, svg, nav, header, footer, iframe, form, button, template").remove();
+  $("br").replaceWith("\n");
+  $("p, div, li, blockquote, h1, h2, h3, h4, h5, h6, section, article, main, tr, dd, dt").each((_, el) => {
+    $(el).prepend("\n").append("\n");
+  });
+  const lines = $("body")
+    .text()
+    .split("\n")
+    .map((l) => clean(l))
+    .filter(Boolean);
+  const out: string[] = [];
+  const seenLine = new Set<string>();
+  for (const l of lines) {
+    // Long lines are content and are kept once; short ones (labels) may repeat.
+    if (l.length > 60) {
+      if (seenLine.has(l)) continue;
+      seenLine.add(l);
+    }
+    out.push(l);
+  }
+  return out.join("\n");
+}
+
+function lettersOnly(t: string): string {
+  return t
+    .toLowerCase()
+    .replace(/\[[^\]]{0,5}\]/g, " ")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * What the app sees for one commentary, for the self-test: how much text the
+ * page yields, whether the verse's excerpt can be found in it, and whether the
+ * excerpt is in the raw HTML at all (if it is there but not in the text, the
+ * extraction is at fault; if it is nowhere, Catena serves it from elsewhere).
+ */
+export async function inspectCommentary(
+  raw: string,
+  excerpt: string,
+): Promise<{
+  pageChars: number;
+  scoped: boolean;
+  scopedChars: number;
+  prefixFound: number;
+  inRawHtml: boolean;
+  scopedStart: string;
+}> {
+  const { $, html } = await get(parseCatenaUrl(raw));
+  const text = readableText($);
+  const needle = lettersOnly(excerpt);
+  const hay = lettersOnly(text);
+  let prefixFound = 0;
+  for (const len of [120, 80, 60, 45, 30, 20]) {
+    if (needle.length >= len && hay.includes(needle.slice(0, len))) {
+      prefixFound = len;
+      break;
+    }
+  }
+  const probe = needle.slice(0, Math.min(40, needle.length));
+  // Plain letters filter here: raw HTML is full of [...] that isn't footnotes.
+  const inRawHtml = probe.length >= 20 && html.toLowerCase().replace(/[^a-z0-9]/g, "").includes(probe);
+  const scopedText = sliceFromExcerpt(text, excerpt);
+  return {
+    pageChars: text.length,
+    scoped: scopedText.length < text.length || prefixFound > 0,
+    scopedChars: scopedText.length,
+    prefixFound,
+    inRawHtml,
+    scopedStart: scopedText.slice(0, 90),
+  };
 }
 
 export async function fetchCatenaText(
@@ -409,18 +518,7 @@ export async function fetchCatenaText(
   const title = clean($('meta[property="og:title"]').attr("content") ?? "") || clean($("title").first().text());
   const metaDesc = clean($('meta[property="og:description"], meta[name="description"]').attr("content") ?? "");
 
-  $("script, style, noscript, svg, nav, header, footer, iframe, form, button").remove();
-  const blocks: string[] = [];
-  $("body")
-    .find("h1, h2, h3, h4, p, li, blockquote, div")
-    .each((_, el) => {
-      const $el = $(el);
-      // Leaf-ish blocks only, so nested divs don't repeat the same text.
-      if ($el.children("p, div, li, blockquote, h1, h2, h3, h4").length > 0) return;
-      const t = clean($el.text());
-      if (t) blocks.push(t);
-    });
-  let text = Array.from(new Set(blocks)).join("\n");
+  let text = readableText($);
   if (text.length < 200 && metaDesc.length > text.length) text = metaDesc;
 
   if (text.length < 80) {
