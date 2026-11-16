@@ -7,7 +7,7 @@ export type Level = "simple" | "study";
  * Bumped whenever the prompt changes shape, so cached answers in the old shape
  * are never served alongside new ones.
  */
-export const PROMPT_VERSION = "v7-letters-only-anchor";
+export const PROMPT_VERSION = "v8-lossless-extraction";
 
 export const SYSTEM = `You help church study groups read Church Fathers' commentaries from the Catena Bible app. Catena uses old 19th-century English translations that are hard for modern readers.
 
